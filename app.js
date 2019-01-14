@@ -11,7 +11,7 @@ const apiRouter = require('./routes/api');
 
 var app = express();
 
-app.set('appName', 'Facebook Posts Creator');
+app.set('appName', 'Firealarm Portal Server');
 
 // view engine setup
 // app.set('views', path.join(__dirname, 'views'));

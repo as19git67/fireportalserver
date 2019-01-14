@@ -85,7 +85,13 @@ function watchForConfigChange(cfgFilepath) {
 
 nconf.defaults({
   "httpPort": 5005,
-  "bearerTokens": {"ttt": "user1", "token2": "user2"}
+  "bearerTokens": {"ttt": "user1", "token2": "user2"},
+  "email_smtp_sender_email": "",
+  "email_smtp_username": "",
+  "email_smtp_password": "",
+  "email_smtp_use_SSL": false,
+  "email_smtp_server_host": "",
+  "email_smtp_server_port": ""
 });
 
 module.exports = nconf;
