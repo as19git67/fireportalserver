@@ -1,0 +1,21 @@
+{
+  "name": "fireportalserver",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node ./server.js"
+  },
+  "dependencies": {
+    "cookie-parser": "~1.4.3",
+    "debug": "~2.6.9",
+    "express": "~4.16.0",
+    "formidable": "^1.2.1",
+    "http-errors": "~1.6.2",
+    "moment": "^2.22.2",
+    "morgan": "^1.9.1",
+    "nconf": "^0.10.0",
+    "passport": "^0.4.0",
+    "passport-http-bearer": "^1.0.1",
+    "underscore": "^1.9.1"
+  }
+}

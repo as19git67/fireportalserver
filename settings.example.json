@@ -1,0 +1,5 @@
+{
+  "httpPort": 5005,
+  "httpsPort": 5055,
+  "bearerTokens": {"insert_a_secret_token_here": "insert_token_name"}
+}
