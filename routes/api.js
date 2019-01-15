@@ -92,14 +92,16 @@ router.post('/jobs', CORS(), function (req, res, next) {
 router.options('/verifyemail', CORS()); // enable pre-flight
 
 router.post('/verifyemail', CORS(), function (req, res, next) {
+  console.log(JSON.stringify(req.body, null, 2));
+
   let form = new formidable.IncomingForm();
   form.parse(req, function (err, fields, files) {
-    if (_.isString(fields['email']) && _.isString(fields['username'])) {
+    if (_.isString(fields['email']) && _.isString(fields['name'])) {
       console.log(JSON.stringify(fields, null, 2));
       let u = new Users();
-      u.createUser(fields.username, fields.email, function (err, user) {
+      u.createUser(fields.name, fields.email, function (err, user) {
         if (err) {
-          console.log(`ERROR creating user with name=${fields.username} and email=${fields.email}: ${err}`);
+          console.log(`ERROR creating user with name=${fields.name} and email=${fields.email}: ${err}`);
           res.status(500).end();
         } else {
           console.log("New user: " + JSON.stringify(user, null, 2));
