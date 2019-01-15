@@ -5,7 +5,7 @@ const moment = require('moment');
 const speakeasy = require('speakeasy');
 
 let Users = module.exports = function () {
-  this.usersFilename = "users.json";
+  this.filename = "users.json";
 
   this.initialize.apply(this, arguments);
 };
@@ -16,7 +16,7 @@ _.extend(Users.prototype, {
 
   _initFile: function (callback) {
     const self = this;
-    fs.exists(this.usersFilename, function (exists) {
+    fs.exists(this.filename, function (exists) {
       if (!exists) {
         let data = {users: {}};
         jf.writeFile(self.usersFilename, data, function (err) {
@@ -46,7 +46,7 @@ _.extend(Users.prototype, {
           callback("Can't create user " + username + ", because it already exists");
         } else {
           let secret = speakeasy.generateSecret();
-          self._addUser(username, email, secret.base32, function (err, user) {
+          self._addJob(username, email, secret.base32, function (err, user) {
             callback(err, user);
           });
         }
@@ -118,7 +118,7 @@ _.extend(Users.prototype, {
     });
   },
 
-  _addUser: function (name, email, secret, callback) {
+  _addJob: function (name, email, secret, callback) {
     const self = this;
     this._initFile(function (data) {
       if (data.users[name]) {

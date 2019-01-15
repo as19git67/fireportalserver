@@ -3,20 +3,101 @@ const path = require('path');
 const express = require('express');
 const passport = require('passport');
 const router = express.Router();
+const CORS = require('cors');
 const _ = require('underscore');
 const config = require('../config');
 const moment = require('moment');
 const nodemailer = require('nodemailer');
 const formidable = require('formidable');
+const Jobs = require('../Jobs');
 const Users = require('../Users');
 
-router.post('/verifyemail', function (req, res, next) {
+router.options('/jobs', CORS()); // enable pre-flight
+
+/* get all jobs */
+router.get('/jobs', CORS(), function (req, res, next) {
+  new Jobs().getAll(function (err, jobs) {
+    if (err) {
+      console.log("ERROR getting jobs: ", err);
+      res.status(500).end();
+    } else {
+      res.json(jobs);
+    }
+  });
+});
+
+/* update a job */
+router.put('/jobs/:id', CORS(), function (req, res, next) {
+  if (isNaN(req.params.id)) {
+    res.status(403);
+    res.end();
+  } else {
+    // complete req.body is the job object
+    if (req.body) {
+      new Jobs().saveJob(req.body, function (err, updatedJob) {
+        if (err) {
+          console.log("ERROR saving job: ", err);
+          res.status(500);
+          res.send('Error while saving job data');
+        } else {
+          res.json(updatedJob);
+        }
+      });
+    } else {
+      res.status(400);
+      res.end();
+    }
+  }
+});
+
+/* delete a job */
+router.delete('/jobs/:id', CORS(), function (req, res, next) {
+  if (isNaN(req.params.id)) {
+    res.status(403);
+    res.end();
+  } else {
+    new Jobs().deleteJob(req.params.id, function (err) {
+      if (err) {
+        console.log(`ERROR deleting job with id: ${req.params.id}: ${err}`);
+        res.status(500);
+        res.send('Error deleting job data');
+      } else {
+        res.end();
+      }
+    });
+  }
+});
+
+/* add a new job */
+router.post('/jobs', CORS(), function (req, res, next) {
+  // complete req.body is the job object
+  if (req.body) {
+    new Jobs().addJob(req.body, function (err, addedJob) {
+      if (err) {
+        console.log("ERROR adding new job: ", err);
+        res.status(500);
+        res.send('Error while adding new job data');
+      } else {
+        res.json(addedJob);
+      }
+    });
+  } else {
+    res.status(400);
+    res.end();
+  }
+});
+
+
+
+router.options('/verifyemail', CORS()); // enable pre-flight
+
+router.post('/verifyemail', CORS(), function (req, res, next) {
   let form = new formidable.IncomingForm();
   form.parse(req, function (err, fields, files) {
     if (_.isString(fields['email']) && _.isString(fields['username'])) {
       console.log(JSON.stringify(fields, null, 2));
       let u = new Users();
-      u.createUser(fields.username, fields.email, function(err, user) {
+      u.createUser(fields.username, fields.email, function (err, user) {
         if (err) {
           console.log(`ERROR creating user with name=${fields.username} and email=${fields.email}: ${err}`);
           res.status(500).end();
