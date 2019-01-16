@@ -87,31 +87,25 @@ router.post('/jobs', CORS(), function (req, res, next) {
   }
 });
 
-
-
 router.options('/verifyemail', CORS()); // enable pre-flight
 
 router.post('/verifyemail', CORS(), function (req, res, next) {
-  console.log(JSON.stringify(req.body, null, 2));
-
-  let form = new formidable.IncomingForm();
-  form.parse(req, function (err, fields, files) {
-    if (_.isString(fields['email']) && _.isString(fields['name'])) {
-      console.log(JSON.stringify(fields, null, 2));
-      let u = new Users();
-      u.createUser(fields.name, fields.email, function (err, user) {
-        if (err) {
-          console.log(`ERROR creating user with name=${fields.name} and email=${fields.email}: ${err}`);
-          res.status(500).end();
-        } else {
-          console.log("New user: " + JSON.stringify(user, null, 2));
-          res.status(200).end();
-        }
-      })
-    } else {
-      res.status(400).end();
-    }
-  });
+  let data = req.body;
+  if (_.isString(data['email']) && _.isString(data['name'])) {
+    console.log(JSON.stringify(data, null, 2));
+    let u = new Users();
+    u.createUser(data.name, data.email, function (err, user) {
+      if (err) {
+        console.log(`ERROR creating user with name=${data.name} and email=${data.email}: ${err}`);
+        res.status(500).end();
+      } else {
+        console.log("New user: " + JSON.stringify(user, null, 2));
+        res.status(200).end();
+      }
+    })
+  } else {
+    res.status(400).end();
+  }
 });
 
 function _sendVerificationEmail(recipient, link) {

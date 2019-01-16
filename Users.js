@@ -19,14 +19,14 @@ _.extend(Users.prototype, {
     fs.exists(this.filename, function (exists) {
       if (!exists) {
         let data = {users: {}};
-        jf.writeFile(self.usersFilename, data, function (err) {
+        jf.writeFile(self.filename, data, function (err) {
           if (err) {
             throw new Error(err);
           }
           callback(data);
         });
       } else {
-        jf.readFile(self.usersFilename, function (err, data) {
+        jf.readFile(self.filename, function (err, data) {
           if (err) {
             throw new Error(err);
           }
@@ -134,7 +134,7 @@ _.extend(Users.prototype, {
           isAdmin: false
         };
         data.users[user.name] = user;
-        jf.writeFile(self.usersFilename, data, function (err) {
+        jf.writeFile(self.filename, data, function (err) {
           if (err) {
             callback(err);
           } else {
@@ -158,7 +158,7 @@ _.extend(Users.prototype, {
       if (data.users[user.name]) {
         _.extend(data.users[user.name],
             _.pick(user, 'name', 'email', 'otpCounter', 'canRead', 'isAdmin'));
-        jf.writeFile(self.usersFilename, data, function (error) {
+        jf.writeFile(self.filename, data, function (error) {
           if (error) {
             callback(error);
           } else {
@@ -181,7 +181,7 @@ _.extend(Users.prototype, {
     const self = this;
     this._initFile(function (data) {
       delete data.users[name];
-      jf.writeFile(self.usersFilename, data, function (error) {
+      jf.writeFile(self.filename, data, function (error) {
         if (error) {
           callback(error);
         } else {
