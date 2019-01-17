@@ -14,178 +14,176 @@ _.extend(Users.prototype, {
   initialize: function () {
   },
 
-  _initFile: function (callback) {
+  _initFile: function () {
     const self = this;
-    fs.exists(this.filename, function (exists) {
-      if (!exists) {
-        let data = {users: {}};
-        jf.writeFile(self.filename, data, function (err) {
-          if (err) {
-            throw new Error(err);
-          }
-          callback(data);
-        });
-      } else {
-        jf.readFile(self.filename, function (err, data) {
-          if (err) {
-            throw new Error(err);
-          }
-          callback(data);
-        });
-      }
-    });
-  },
+    return new Promise((resolve, reject) => {
+      fs.exists(this.filename, function (exists) {
+        if (!exists) {
+          let data = {users: {}};
+          jf.writeFile(self.filename, data, function (err) {
+            if (err) {
+              reject(err);
+            } else {
+              resolve(data);
+            }
+          });
 
-  createUser: function (username, email, callback) {
-    const self = this;
-    this.getUserByName(username, function (err, existingUser) {
-      if (err) {
-        callback(err);
-      } else {
-        if (existingUser) {
-          callback("Can't create user " + username + ", because it already exists");
         } else {
-          let secret = speakeasy.generateSecret();
-          self._addJob(username, email, secret.base32, function (err, user) {
-            callback(err, user);
+          jf.readFile(self.filename, function (err, data) {
+            if (err) {
+              reject(err);
+            } else {
+              resolve(data)
+            }
           });
         }
-      }
+      });
     });
   },
 
-  checkPassword: function (user, password) {
-    return false;
-  },
-
-  getUserByEmail: function (email, options, callback) {
-    options || (options = {});
+  createUser: async function (username, email) {
     const self = this;
-    this._initFile(function (data) {
-      let user = _.findWhere(data.users, {email: email});
-      if (user) {
-        callback(null, {
-          username: user.username,
-          email: user.email,
-          state: user.state,
-          canRead: user.canRead,
-          isAdmin: user.isAdmin,
-          otpCounter: user.otpCounter
-        });
+    let existingUser = await this.getUserByName(username);
+    if (existingUser) {
+      if (existingUser.state === "new") {
+        await self.deleteUser(existingUser.name)
       } else {
-        console.log("User with email ", email, " does not exist.");
-        callback();
+        throw new Error("Can't create user " + username + ", because it already exists");
       }
-    });
+    }
+    let secret = speakeasy.generateSecret();
+    let user = await self._addUser(username, email, secret.base32);
+    return user;
   },
 
-  getUserByName: function (name, callback) {
-    const self = this;
-    this._initFile(function (data) {
-      const user = data.users[name];
-      if (user) {
-        callback(null, {
+  getUserByEmail: async function (email, options) {
+    options || (options = {});
+    let data = await this._initFile();
+    let user = _.findWhere(data.users, {email: email});
+    if (user) {
+      return {
+        username: user.username,
+        email: user.email,
+        state: user.state,
+        canRead: user.canRead,
+        isAdmin: user.isAdmin,
+        otpCounter: user.otpCounter
+      };
+    } else {
+      console.log("User with email ", email, " does not exist.");
+    }
+  },
+
+  getUserByName: async function (name) {
+    let data = await this._initFile();
+    const user = data.users[name];
+    if (user) {
+      return {
+        name: user.name,
+        email: user.email,
+        state: user.state,
+        canRead: user.canRead,
+        isAdmin: user.isAdmin,
+        otpCounter: user.otpCounter
+      };
+    }
+  },
+
+  getUserSecretByName: async function (name) {
+    let data = await this._initFile();
+    const user = data.users[name];
+    if (user) {
+      return {
+        secret: user.secret
+      };
+    }
+  },
+
+  getAll: async function () {
+    let data = await this._initFile();
+    if (data) {
+      return _.map(data.users, function (user) {
+        return {
           name: user.name,
           email: user.email,
           state: user.state,
           canRead: user.canRead,
           isAdmin: user.isAdmin,
           otpCounter: user.otpCounter
-        });
-      } else {
-        callback(null, null);
-      }
-    });
-  },
-
-  getAll: function (callback) {
-    const self = this;
-    this._initFile(function (data) {
-      if (data) {
-        callback(null, _.map(data.users, function (user) {
-          return {
-            name: user.name,
-            email: user.email,
-            state: user.state,
-            canRead: user.canRead,
-            isAdmin: user.isAdmin,
-            otpCounter: user.otpCounter
-          };
-        }));
-      } else {
-        callback(null, []);
-      }
-    });
-  },
-
-  _addJob: function (name, email, secret, callback) {
-    const self = this;
-    this._initFile(function (data) {
-      if (data.users[name]) {
-        callback("Can't add existing user");
-      } else {
-        let user = {
-          name: name,
-          email: email,
-          secret: secret,
-          otpCounter: 0,
-          state: 'new',
-          canRead: false,
-          isAdmin: false
         };
-        data.users[user.name] = user;
-        jf.writeFile(self.filename, data, function (err) {
-          if (err) {
-            callback(err);
+      });
+    } else {
+      return [];
+    }
+  },
+
+  _addUser: async function (name, email, secret) {
+    const self = this;
+    let data = await this._initFile();
+    if (data.users[name]) {
+      throw new Error("Can't add existing user");
+    } else {
+      let user = {
+        name: name,
+        email: email,
+        secret: secret,
+        otpCounter: 0,
+        state: 'new',
+        canRead: false,
+        isAdmin: false
+      };
+      data.users[user.name] = user;
+      return new Promise((resolve, reject) => {
+        jf.writeFile(self.filename, data, function (error) {
+          if (error) {
+            reject(error);
           } else {
-            callback(null, user);
+            resolve(user);
           }
         });
-      }
-    });
+      });
+    }
   },
 
   /* updates user information - without secret and otpCounter */
-  saveUser: function (user, callback) {
+  saveUser: async function (user) {
     if (!user.name) {
       const err = "ERROR: attempt to save incomplete user";
       console.log(err);
-      callback(err);
-      return;
+      throw new Error(err);
     }
     const self = this;
-    this._initFile(function (data) {
-      if (data.users[user.name]) {
-        _.extend(data.users[user.name],
-            _.pick(user, 'name', 'email', 'otpCounter', 'canRead', 'isAdmin'));
+    let data = await this._initFile();
+    if (data.users[user.name]) {
+      _.extend(data.users[user.name], _.pick(user, 'name', 'email', 'otpCounter', 'canRead', 'isAdmin'));
+      return new Promise((resolve, reject) => {
         jf.writeFile(self.filename, data, function (error) {
           if (error) {
-            callback(error);
+            reject(error);
           } else {
-            callback(null);
+            resolve();
           }
         });
-      } else {
-        callback("User does not exist")
-      }
-    });
+      });
+    } else {
+      throw new Error("User does not exist")
+    }
   },
 
-  deleteUser: function (name, callback) {
+  deleteUser: async function (name) {
     if (!name) {
       const err = "ERROR: attempt to delete user with undefined name";
-      console.log(err);
-      callback(err);
-      return;
+      throw new Error(err);
     }
     const self = this;
-    this._initFile(function (data) {
-      delete data.users[name];
+    let data = await this._initFile();
+    delete data.users[name];
+    return new Promise((resolve, reject) => {
       jf.writeFile(self.filename, data, function (error) {
         if (error) {
-          callback(error);
+          reject(error);
         } else {
-          callback(null);
+          resolve();
         }
       });
     });

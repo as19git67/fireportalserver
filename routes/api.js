@@ -92,23 +92,73 @@ router.options('/verifyemail', CORS()); // enable pre-flight
 router.post('/verifyemail', CORS(), function (req, res, next) {
   let data = req.body;
   if (_.isString(data['email']) && _.isString(data['name'])) {
-    console.log(JSON.stringify(data, null, 2));
+    // console.log(JSON.stringify(data, null, 2));
     let u = new Users();
-    u.createUser(data.name, data.email, function (err, user) {
-      if (err) {
-        console.log(`ERROR creating user with name=${data.name} and email=${data.email}: ${err}`);
-        res.status(500).end();
+    u.getUserByName(data.name).then(existingUser => {
+      if (existingUser === undefined || (existingUser && existingUser.state === 'new')) {
+        u.createUser(data.name, data.email).then(user => {
+          console.log("New user: " + JSON.stringify(user, null, 2));
+          _sendVerificationEmail(data.email, `http://localhost:8080/#/setupauth3?name=${data.name}&email=${data.email}`)
+              .then(() => {
+                res.status(200).end();
+              })
+              .catch(reason => {
+                console.log(`ERROR sending verification email: ${reason}`);
+                res.status(500).end();
+              });
+        }).catch(reason => {
+          console.log(`ERROR creating user with name ${data.name} and email ${data.email}: ${reason}`);
+          res.status(500).end();
+        });
       } else {
-        console.log("New user: " + JSON.stringify(user, null, 2));
-        res.status(200).end();
+        if (existingUser) {
+          console.log(`ERROR: user with name ${data.name} already exists with state ${existingUser.state} `);
+          res.status(429).send('User already exists');
+        }
       }
-    })
+    }).catch(reason => {
+      console.log(`ERROR while getting user with name ${data.name}: ${reason}`);
+      res.status(500).end();
+    });
   } else {
     res.status(400).end();
   }
 });
 
-function _sendVerificationEmail(recipient, link) {
+router.options('/usersecret', CORS()); // enable pre-flight
+
+router.get('/usersecret', CORS(), function (req, res, next) {
+  let name = req.query.name;
+  let email = req.query.email;
+  if (name && email) {
+    let u = new Users();
+    u.getUserByName(name).then(user => {
+      if (user) {
+        if (email === user.email && user.state === 'new') {
+          u.getUserSecretByName(name)
+              .then(secret => {
+                res.json(JSON.stringify(secret));
+              })
+              .catch(reason => {
+                console.log(`ERROR retrieving user secret for ${name}: ${reason}`);
+                res.status(500).end();
+              });
+        } else {
+          res.status(401).end();
+        }
+      } else {
+        res.status(404).end();
+      }
+    }).catch(reason => {
+      console.log(`ERROR retrieving user information for ${name}: ${reason}`);
+      res.status(500).end();
+    });
+  } else {
+    res.status(400).send('Missing parameters');
+  }
+});
+
+async function _sendVerificationEmail(recipient, link) {
   return new Promise((resolve, reject) => {
 
     // create reusable transport method (opens pool of SMTP connections)

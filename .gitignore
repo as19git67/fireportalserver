@@ -1,11 +1,12 @@
 .DS_Store
 .idea/
-.idea
 .vscode
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 node_modules/
+/users.json
 /jobs.json
 /jobs Kopie.json
+/settings.json
