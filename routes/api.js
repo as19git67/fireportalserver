@@ -11,6 +11,7 @@ const nodemailer = require('nodemailer');
 const formidable = require('formidable');
 const Jobs = require('../Jobs');
 const Users = require('../Users');
+const QRCode = require('qrcode');
 
 router.options('/jobs', CORS()); // enable pre-flight
 
@@ -97,8 +98,8 @@ router.post('/verifyemail', CORS(), function (req, res, next) {
     u.getUserByName(data.name).then(existingUser => {
       if (existingUser === undefined || (existingUser && existingUser.state === 'new')) {
         u.createUser(data.name, data.email).then(user => {
-          console.log("New user: " + JSON.stringify(user, null, 2));
-          _sendVerificationEmail(data.email, `http://localhost:8080/#/setupauth3?name=${data.name}&email=${data.email}`)
+          // console.log("New user: " + JSON.stringify(user, null, 2));
+          _sendVerificationEmail(data.email, `${req.headers.origin}/#/setupauth3?name=${data.name}&email=${data.email}`)
               .then(() => {
                 res.status(200).end();
               })
@@ -125,6 +126,34 @@ router.post('/verifyemail', CORS(), function (req, res, next) {
   }
 });
 
+router.options('/verifycode', CORS()); // enable pre-flight
+
+router.post('/verifycode', CORS(), function (req, res, next) {
+  let data = req.body;
+  if (_.isString(data['code']) && _.isString(data['name'])) {
+    let u = new Users();
+    u.getUserByName(data.name).then(existingUser => {
+      if (existingUser) {
+        u.verifyCode(data.name, data.code)
+            .then(() => {
+              // todo: if user.state === 'new' -> user.state = 'provisioned'
+              res.status(200).end();
+            })
+            .catch(reason => {
+              res.status(401).end();
+            });
+      } else {
+        res.status(404).send('User unknown');
+      }
+    }).catch(reason => {
+      console.log(`ERROR while getting user with name ${data.name}: ${reason}`);
+      res.status(500).end();
+    });
+  } else {
+    res.status(400).end();
+  }
+});
+
 router.options('/usersecret', CORS()); // enable pre-flight
 
 router.get('/usersecret', CORS(), function (req, res, next) {
@@ -135,7 +164,7 @@ router.get('/usersecret', CORS(), function (req, res, next) {
     u.getUserByName(name).then(user => {
       if (user) {
         if (email === user.email && user.state === 'new') {
-          u.getUserSecretByName(name)
+          u.getUserSecretByName(name, req.app.get('appName'))
               .then(secret => {
                 res.json(JSON.stringify(secret));
               })

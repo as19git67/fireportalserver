@@ -89,13 +89,33 @@ _.extend(Users.prototype, {
     }
   },
 
-  getUserSecretByName: async function (name) {
+  getUserSecretByName: async function (name, issuer) {
     let data = await this._initFile();
     const user = data.users[name];
     if (user) {
+      const otpauthURL = speakeasy.otpauthURL({secret: user.secret, encoding: 'base32', label: user.email, issuer: issuer});
       return {
-        secret: user.secret
+        secret: user.secret,
+        otpauthURL: otpauthURL
       };
+    }
+  },
+
+  verifyCode: async function (name, code) {
+    let data = await this._initFile();
+    const user = data.users[name];
+    if (user) {
+      let tokenValidates = speakeasy.totp.verify({
+        secret: user.secret,
+        encoding: 'base32',
+        token: code,
+        window: 6
+      });
+      if (!tokenValidates) {
+        throw new Error('Code verification failed')
+      }
+    } else {
+      throw new Error('Unknown user');
     }
   },
 
