@@ -137,6 +137,7 @@ router.post('/verifycode', CORS(), function (req, res, next) {
         u.verifyCode(data.name, data.code)
             .then(() => {
               existingUser.state = 'provisioned';
+              existingUser.expiredAfter = moment().add(1, 'month');
               u.saveUser(existingUser)
                   .then(() => {
                     res.status(200).end();
@@ -192,6 +193,19 @@ router.get('/usersecret', CORS(), function (req, res, next) {
   } else {
     res.status(400).send('Missing parameters');
   }
+});
+
+router.options('/users', CORS()); // enable pre-flight
+
+router.get('/users', CORS(), function (req, res, next) {
+  new Users().getAll()
+      .then(users => {
+        res.json(users);
+      })
+      .catch(reason => {
+        console.log(`ERROR retrieving users: ${reason}`);
+        res.status(500).end();
+      });
 });
 
 async function _sendVerificationEmail(recipient, link) {

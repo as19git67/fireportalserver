@@ -52,7 +52,7 @@ _.extend(Users.prototype, {
       }
     }
     let secret = speakeasy.generateSecret();
-    let user = await self._addUser(username, email, secret.base32);
+    let user = await self._addUser(username, email, secret.base32, moment().add(1, 'week'));
     return user;
   },
 
@@ -120,13 +120,23 @@ _.extend(Users.prototype, {
   getAll: async function () {
     let data = await this._initFile();
     if (data) {
-      return _.map(data.users, function (user) {
+      let notExpiredUsers = _.filter(data.users, function (user) {
+        if (!user.expiredAfter) {
+          user.expiredAfter = "9999-12-31";
+          return true;
+        } else {
+          let ea = moment(user.expiredAfter);
+          return moment().isBefore(ea)
+        }
+      });
+      return _.map(notExpiredUsers, function (user) {
         return {
           name: user.name,
           email: user.email,
           state: user.state,
           canRead: user.canRead,
-          isAdmin: user.isAdmin
+          isAdmin: user.isAdmin,
+          expiredAfter: user.expiredAfter
         };
       });
     } else {
@@ -134,7 +144,7 @@ _.extend(Users.prototype, {
     }
   },
 
-  _addUser: async function (name, email, secret) {
+  _addUser: async function (name, email, secret, expiredAfter) {
     const self = this;
     let data = await this._initFile();
     if (data.users[name]) {
@@ -146,7 +156,8 @@ _.extend(Users.prototype, {
         secret: secret,
         state: 'new',
         canRead: false,
-        isAdmin: false
+        isAdmin: false,
+        expiredAfter: expiredAfter
       };
       data.users[user.name] = user;
       return new Promise((resolve, reject) => {
@@ -171,7 +182,7 @@ _.extend(Users.prototype, {
     const self = this;
     let data = await this._initFile();
     if (data.users[user.name]) {
-      _.extend(data.users[user.name], _.pick(user, 'name', 'email', 'state', 'canRead', 'isAdmin'));
+      _.extend(data.users[user.name], _.pick(user, 'name', 'email', 'state', 'canRead', 'isAdmin', 'expiredAfter'));
       return new Promise((resolve, reject) => {
         jf.writeFile(self.filename, data, function (error) {
           if (error) {
