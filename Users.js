@@ -66,8 +66,7 @@ _.extend(Users.prototype, {
         email: user.email,
         state: user.state,
         canRead: user.canRead,
-        isAdmin: user.isAdmin,
-        otpCounter: user.otpCounter
+        isAdmin: user.isAdmin
       };
     } else {
       console.log("User with email ", email, " does not exist.");
@@ -83,8 +82,7 @@ _.extend(Users.prototype, {
         email: user.email,
         state: user.state,
         canRead: user.canRead,
-        isAdmin: user.isAdmin,
-        otpCounter: user.otpCounter
+        isAdmin: user.isAdmin
       };
     }
   },
@@ -128,8 +126,7 @@ _.extend(Users.prototype, {
           email: user.email,
           state: user.state,
           canRead: user.canRead,
-          isAdmin: user.isAdmin,
-          otpCounter: user.otpCounter
+          isAdmin: user.isAdmin
         };
       });
     } else {
@@ -147,7 +144,6 @@ _.extend(Users.prototype, {
         name: name,
         email: email,
         secret: secret,
-        otpCounter: 0,
         state: 'new',
         canRead: false,
         isAdmin: false
@@ -175,7 +171,7 @@ _.extend(Users.prototype, {
     const self = this;
     let data = await this._initFile();
     if (data.users[user.name]) {
-      _.extend(data.users[user.name], _.pick(user, 'name', 'email', 'otpCounter', 'canRead', 'isAdmin'));
+      _.extend(data.users[user.name], _.pick(user, 'name', 'email', 'state', 'canRead', 'isAdmin'));
       return new Promise((resolve, reject) => {
         jf.writeFile(self.filename, data, function (error) {
           if (error) {

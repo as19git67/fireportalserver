@@ -136,8 +136,15 @@ router.post('/verifycode', CORS(), function (req, res, next) {
       if (existingUser) {
         u.verifyCode(data.name, data.code)
             .then(() => {
-              // todo: if user.state === 'new' -> user.state = 'provisioned'
-              res.status(200).end();
+              existingUser.state = 'provisioned';
+              u.saveUser(existingUser)
+                  .then(() => {
+                    res.status(200).end();
+                  })
+                  .catch(reason => {
+                    console.log(`ERROR while saving user with name ${existingUser.name}: ${reason}`);
+                    res.status(500).end();
+                  });
             })
             .catch(reason => {
               res.status(401).end();
