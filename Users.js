@@ -188,7 +188,15 @@ _.extend(Users.prototype, {
           if (error) {
             reject(error);
           } else {
-            resolve();
+            let savedUser = data.users[user.name];
+            resolve({
+              name: savedUser.name,
+              email: savedUser.email,
+              state: savedUser.state,
+              canRead: savedUser.canRead,
+              isAdmin: savedUser.isAdmin,
+              expiredAfter: savedUser.expiredAfter
+            });
           }
         });
       });

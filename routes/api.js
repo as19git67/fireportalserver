@@ -208,6 +208,75 @@ router.get('/users', CORS(), function (req, res, next) {
       });
 });
 
+router.options('/user/:name', CORS()); // enable pre-flight
+
+router.get('/user/:name', CORS(), function (req, res, next) {
+  const name = req.params.name;
+  new Users().getUserByName(name)
+      .then(user => {
+        if (user) {
+          res.json(user);
+        } else {
+          res.status(404).end();
+        }
+      })
+      .catch(reason => {
+        console.log(`ERROR retrieving user with name ${name}: ${reason}`);
+        res.status(500).end();
+      });
+});
+
+router.put('/user/:name', CORS(), function (req, res, next) {
+  const name = req.params.name;
+  let u = new Users();
+  u.getUserByName(name)
+      .then(user => {
+        if (user) {
+          let newUserData = _.pick(req.body, 'email', 'state', 'isAdmin', 'canRead');
+          let updateUser = _.extend(user, newUserData);
+
+          u.saveUser(updateUser)
+              .then(savedUser => {
+                res.json(savedUser);
+              })
+              .catch(reason => {
+                console.log(`ERROR retrieving user with name ${name}: ${reason}`);
+                res.status(500).end();
+              });
+        } else {
+          res.status(404).end();
+        }
+      })
+      .catch(reason => {
+        console.log(`ERROR retrieving user with name ${name}: ${reason}`);
+        res.status(500).end();
+      });
+});
+
+router.delete('/user/:name', CORS(), function (req, res, next) {
+  const name = req.params.name;
+  let u = new Users();
+  u.getUserByName(name)
+      .then(user => {
+        if (user) {
+          u.deleteUser(user.name)
+              .then(() => {
+                res.end();
+              })
+              .catch(reason => {
+                console.log(`ERROR deleting user with name ${name}: ${reason}`);
+                res.status(500).end();
+              });
+        } else {
+          res.status(404).end();
+        }
+      })
+      .catch(reason => {
+        console.log(`ERROR retrieving user with name ${name}: ${reason}`);
+        res.status(500).end();
+      });
+});
+
 async function _sendVerificationEmail(recipient, link) {
   return new Promise((resolve, reject) => {
 
