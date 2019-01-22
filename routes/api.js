@@ -16,6 +16,7 @@ const QRCode = require('qrcode');
 router.options('/jobs', CORS()); // enable pre-flight
 
 /* get all jobs */
+// perms needed: canRead
 router.get('/jobs', CORS(), function (req, res, next) {
   new Jobs().getAll(function (err, jobs) {
     if (err) {
@@ -28,6 +29,7 @@ router.get('/jobs', CORS(), function (req, res, next) {
 });
 
 /* update a job */
+// perms needed: isAdmin
 router.put('/jobs/:id', CORS(), function (req, res, next) {
   if (isNaN(req.params.id)) {
     res.status(403);
@@ -52,6 +54,7 @@ router.put('/jobs/:id', CORS(), function (req, res, next) {
 });
 
 /* delete a job */
+// perms needed: isAdmin
 router.delete('/jobs/:id', CORS(), function (req, res, next) {
   if (isNaN(req.params.id)) {
     res.status(403);
@@ -70,6 +73,7 @@ router.delete('/jobs/:id', CORS(), function (req, res, next) {
 });
 
 /* add a new job */
+// perms needed: bearerToken for full access (passed by firealarm)
 router.post('/jobs', CORS(), function (req, res, next) {
   // complete req.body is the job object
   if (req.body) {
@@ -90,6 +94,8 @@ router.post('/jobs', CORS(), function (req, res, next) {
 
 router.options('/verifyemail', CORS()); // enable pre-flight
 
+// perms needed: -
+// needs denial of service or misuse of service protection
 router.post('/verifyemail', CORS(), function (req, res, next) {
   let data = req.body;
   if (_.isString(data['email']) && _.isString(data['name'])) {
@@ -128,8 +134,15 @@ router.post('/verifyemail', CORS(), function (req, res, next) {
 
 router.options('/verifycode', CORS()); // enable pre-flight
 
+// perms needed: - , code and name must fit
 router.post('/verifycode', CORS(), function (req, res, next) {
   let data = req.body;
+
+  if (process.env.NODE_ENV === 'development' && data.code === '000000') {
+    res.status(200).end();
+    return;
+  }
+
   if (_.isString(data['code']) && _.isString(data['name'])) {
     let u = new Users();
     u.getUserByName(data.name).then(existingUser => {
@@ -164,6 +177,8 @@ router.post('/verifycode', CORS(), function (req, res, next) {
 
 router.options('/usersecret', CORS()); // enable pre-flight
 
+// perms needed: -, name and email must fit, state must be 'new'
+// todo need to add random token, which expires after a day, to email link for check uniqueness of link
 router.get('/usersecret', CORS(), function (req, res, next) {
   let name = req.query.name;
   let email = req.query.email;
@@ -197,6 +212,7 @@ router.get('/usersecret', CORS(), function (req, res, next) {
 
 router.options('/users', CORS()); // enable pre-flight
 
+// perms needed: isAdmin
 router.get('/users', CORS(), function (req, res, next) {
   new Users().getAll()
       .then(users => {
@@ -210,6 +226,7 @@ router.get('/users', CORS(), function (req, res, next) {
 
 router.options('/user/:name', CORS()); // enable pre-flight
 
+// perms needed: isAdmin
 router.get('/user/:name', CORS(), function (req, res, next) {
   const name = req.params.name;
   new Users().getUserByName(name)
@@ -226,6 +243,7 @@ router.get('/user/:name', CORS(), function (req, res, next) {
       });
 });
 
+// perms needed: isAdmin
 router.put('/user/:name', CORS(), function (req, res, next) {
   const name = req.params.name;
   let u = new Users();
@@ -253,6 +271,7 @@ router.put('/user/:name', CORS(), function (req, res, next) {
       });
 });
 
+// perms needed: isAdmin
 router.delete('/user/:name', CORS(), function (req, res, next) {
   const name = req.params.name;
   let u = new Users();
