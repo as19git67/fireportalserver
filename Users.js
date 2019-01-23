@@ -3,8 +3,11 @@ const jf = require('jsonfile');
 const _ = require('underscore');
 const moment = require('moment');
 const speakeasy = require('speakeasy');
+const hat = require('hat');
 
-let Users = module.exports = function () {
+let Users = module.exports = function (options) {
+  options || (options = {});
+  this.tokenLifetimeInMinutes = options.tokenLifetimeInMinutes ? options.tokenLifetimeInMinutes : 60;
   this.filename = "users.json";
 
   this.initialize.apply(this, arguments);
@@ -109,11 +112,48 @@ _.extend(Users.prototype, {
         token: code,
         window: 6
       });
-      if (!tokenValidates) {
+
+      if (process.env.NODE_ENV === 'development' && code === '000000') {
+        console.log("WARNING: token validation bypassed for debugging");
+        return true;
+      }
+
+      if (tokenValidates) {
+        return true;
+      } else {
         throw new Error('Code verification failed')
       }
     } else {
       throw new Error('Unknown user');
+    }
+  },
+
+  verifyCodeAndCreateAccessTokenForUser: async function (name, code) {
+
+    let codeOk = await this.verifyCode(name, code);
+    if (codeOk) {
+      const tokenValue = hat().toString('base64');
+      const tokenData = {
+        accessToken: tokenValue,
+        accessTokenExpiresAfter: moment().add(this.tokenLifetimeInMinutes, 'minutes')
+      };
+
+      const self = this;
+      let data = await this._initFile();
+      if (data.users[name]) {
+        _.extend(data.users[name], {accessToken: tokenData.accessToken, accessTokenExpiresAfter: tokenData.accessTokenExpiresAfter});
+        return new Promise((resolve, reject) => {
+          jf.writeFile(self.filename, data, function (error) {
+            if (error) {
+              reject(error);
+            } else {
+              resolve(tokenData);
+            }
+          });
+        });
+      } else {
+        throw new Error("User does not exist")
+      }
     }
   },
 

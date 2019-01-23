@@ -138,27 +138,31 @@ router.options('/verifycode', CORS()); // enable pre-flight
 router.post('/verifycode', CORS(), function (req, res, next) {
   let data = req.body;
 
-  if (process.env.NODE_ENV === 'development' && data.code === '000000') {
-    res.status(200).end();
-    return;
-  }
-
   if (_.isString(data['code']) && _.isString(data['name'])) {
-    let u = new Users();
+    let u = new Users({tokenLifetimeInMinutes: config.get('tokenLifetimeInMinutes')});
     u.getUserByName(data.name).then(existingUser => {
       if (existingUser) {
-        u.verifyCode(data.name, data.code)
-            .then(() => {
-              existingUser.state = 'provisioned';
-              existingUser.expiredAfter = moment().add(1, 'month');
-              u.saveUser(existingUser)
-                  .then(() => {
-                    res.status(200).end();
-                  })
-                  .catch(reason => {
-                    console.log(`ERROR while saving user with name ${existingUser.name}: ${reason}`);
-                    res.status(500).end();
-                  });
+        u.verifyCodeAndCreateAccessTokenForUser(data.name, data.code)
+            .then(tokenData => {
+              if (tokenData) {
+                if (existingUser.state === 'new') {
+                  existingUser.state = 'provisioned';
+                  existingUser.expiredAfter = moment().add(1, 'month');
+
+                  u.saveUser(existingUser)
+                      .then(() => {
+                        res.json(tokenData);
+                      })
+                      .catch(reason => {
+                        console.log(`ERROR while saving user with name ${existingUser.name}: ${reason}`);
+                        res.status(500).end();
+                      });
+                } else {
+                  res.json(tokenData);
+                }
+              } else {
+                res.status(401).end();
+              }
             })
             .catch(reason => {
               res.status(401).end();
