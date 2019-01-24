@@ -140,19 +140,29 @@ _.extend(Users.prototype, {
 
       const self = this;
       let data = await this._initFile();
-      if (data.users[name]) {
-        _.extend(data.users[name], {accessToken: tokenData.accessToken, accessTokenExpiresAfter: tokenData.accessTokenExpiresAfter});
+      let user = data.users[name];
+      if (user) {
+        _.extend(user, {accessToken: tokenData.accessToken, accessTokenExpiresAfter: tokenData.accessTokenExpiresAfter});
         return new Promise((resolve, reject) => {
           jf.writeFile(self.filename, data, function (error) {
             if (error) {
               reject(error);
             } else {
+              tokenData.accessRights = [];
+              if (user.isAdmin) {
+                tokenData.accessRights.push('admin');
+                tokenData.accessRights.push('read');
+              } else {
+                if (user.canRead) {
+                  tokenData.accessRights.push('read');
+                }
+              }
               resolve(tokenData);
             }
           });
         });
       } else {
-        throw new Error("User does not exist")
+        throw new Error("User does not exist");
       }
     }
   },
