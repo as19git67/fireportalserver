@@ -40,7 +40,7 @@ let Right = function (right) {
           console.log(`User ${req.user.name} has required right ${right} -> pass`);
           next();
         } else {
-          console.log(`User ${req.user.name} does not have required right ${right} -> pass`);
+          console.log(`User ${req.user.name} does not have required right ${right}`);
           next({status: 403});
         }
       } else {
