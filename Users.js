@@ -54,8 +54,17 @@ _.extend(Users.prototype, {
         throw new Error("Can't create user " + username + ", because it already exists");
       }
     }
-    let secret = speakeasy.generateSecret();
-    let user = await self._addUser(username, email, secret.base32, moment().add(1, 'week'));
+    // generate accessToken already at this state to be able to use it in the confirmation URL
+    const tokenData = {
+      accessToken: hat().toString('base64'),
+      accessTokenExpiresAfter: moment().add(2, 'days')
+    };
+    // secretData is for totp code based authentication
+    const secretData = {
+      secret: speakeasy.generateSecret().base32,
+      expiredAfter: tokenData.accessTokenExpiresAfter
+    };
+    let user = await self._addUser(username, email, secretData, tokenData);
     return user;
   },
 
@@ -159,11 +168,11 @@ _.extend(Users.prototype, {
     }
   },
 
-  verifyTokenAndGetUser: async function (name, token) {
+  verifyTokenAndGetUser: async function (name, token, newToo) {
     let data = await this._initFile();
     let user = data.users[name];
     if (user) {
-      if (user.state === 'provisioned') {
+      if (newToo || user.state === 'provisioned') {
         if (user.accessToken === token) {
           let now = moment();
           if (now.isAfter(user.accessTokenExpiresAfter)) {
@@ -222,7 +231,7 @@ _.extend(Users.prototype, {
     }
   },
 
-  _addUser: async function (name, email, secret, expiredAfter) {
+  _addUser: async function (name, email, secretData, tokenData) {
     const self = this;
     let data = await this._initFile();
     if (data.users[name]) {
@@ -231,11 +240,13 @@ _.extend(Users.prototype, {
       let user = {
         name: name,
         email: email,
-        secret: secret,
+        secret: secretData.secret,
         state: 'new',
         canRead: false,
         isAdmin: false,
-        expiredAfter: expiredAfter
+        expiredAfter: secretData.expiredAfter,
+        accessToken: tokenData.accessToken,
+        accessTokenExpiresAfter: tokenData.accessTokenExpiresAfter
       };
       data.users[user.name] = user;
       return new Promise((resolve, reject) => {

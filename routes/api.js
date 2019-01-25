@@ -160,7 +160,8 @@ router.post('/verifyemail', CORS(), function (req, res, next) {
           sendNextEmailNotBefore = moment();
           sendNextEmailNotBefore.add(5, 'minutes');
 
-          _sendVerificationEmail(data.email, `${req.headers.origin}/#/setupauth3?name=${data.name}&email=${data.email}`)
+          _sendVerificationEmail(data.email,
+              `${req.headers.origin}/#/setupauth3?name=${data.name}&email=${data.email}&token=${user.accessToken}`)
               .then(() => {
                 res.status(200).end();
               })
@@ -237,13 +238,13 @@ router.post('/verifycode', CORS(), function (req, res, next) {
 router.options('/usersecret', CORS()); // enable pre-flight
 
 // perms needed: -, name and email must fit, state must be 'new'
-// todo need to add random token, which expires after a day, to email link for check uniqueness of link
 router.get('/usersecret', CORS(), function (req, res, next) {
   let name = req.query.name;
   let email = req.query.email;
-  if (name && email) {
+  let token = req.query.token;
+  if (name && email && token) {
     let u = new Users();
-    u.getUserByName(name).then(user => {
+    u.verifyTokenAndGetUser(name, token, true).then(user => {
       if (user) {
         if (email === user.email && user.state === 'new') {
           u.getUserSecretByName(name, req.app.get('appName'))
@@ -251,8 +252,8 @@ router.get('/usersecret', CORS(), function (req, res, next) {
                 res.json(JSON.stringify(secret));
               })
               .catch(reason => {
-                console.log(`ERROR retrieving user secret for ${name}: ${reason}`);
-                res.status(500).end();
+                console.log(`ERROR retrieving user secret for ${name}: ${reason.message}`);
+                res.status(reason.status ? reason.status : 500).end();
               });
         } else {
           res.status(401).end();
@@ -261,8 +262,8 @@ router.get('/usersecret', CORS(), function (req, res, next) {
         res.status(404).end();
       }
     }).catch(reason => {
-      console.log(`ERROR retrieving user information for ${name}: ${reason}`);
-      res.status(500).end();
+      console.log(`ERROR retrieving user information for ${name}: ${reason.message}`);
+      res.status(reason.status ? reason.status : 500).end();
     });
   } else {
     res.status(400).send('Missing parameters');
