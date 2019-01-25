@@ -8,16 +8,57 @@ const _ = require('underscore');
 const config = require('../config');
 const moment = require('moment');
 const nodemailer = require('nodemailer');
-const formidable = require('formidable');
 const Jobs = require('../Jobs');
 const Users = require('../Users');
-const QRCode = require('qrcode');
+
+function authenticate(req, res, next) {
+  // check for bearer authentication header with token
+  let token = '';
+  if (req.headers && req.headers.authorization) {
+    let parts = req.headers.authorization.split(' ');
+    if (parts.length === 2) {
+      let scheme = parts[0], credentials = parts[1];
+      if (/^Bearer/i.test(scheme)) {
+        token = credentials;
+      }
+    }
+  }
+  if (token) {
+    passport.authenticate('bearer', {session: false})(req, res, next);
+  } else {
+    passport.authenticate('basic', {session: false})(req, res, next);
+  }
+}
+
+let Right = function (right) {
+  return function (req, res, next) {
+    if (req.user) {
+      let accessRights = req.user.accessRights;
+      if (accessRights) {
+        console.log(`Access rights of user ${req.user.name}: ${accessRights}`);
+        if (_.contains(accessRights, right)) {
+          console.log(`User ${req.user.name} has required right ${right} -> pass`);
+          next();
+        } else {
+          console.log(`User ${req.user.name} does not have required right ${right} -> pass`);
+          next({status: 403});
+        }
+      } else {
+        console.log("Error: user object contains no accessRights");
+        next({status: 500});
+      }
+    } else {
+      console.log("Error: Rights called, but user not set in req");
+      next({status: 500});
+    }
+  };
+};
 
 router.options('/jobs', CORS()); // enable pre-flight
 
 /* get all jobs */
 // perms needed: canRead
-router.get('/jobs', CORS(), function (req, res, next) {
+router.get('/jobs', CORS(), authenticate, Right('read'), function (req, res, next) {
   new Jobs().getAll(function (err, jobs) {
     if (err) {
       console.log("ERROR getting jobs: ", err);
@@ -30,9 +71,9 @@ router.get('/jobs', CORS(), function (req, res, next) {
 
 /* update a job */
 // perms needed: isAdmin
-router.put('/jobs/:id', CORS(), function (req, res, next) {
+router.put('/jobs/:id', CORS(), authenticate, Right('admin'), function (req, res, next) {
   if (isNaN(req.params.id)) {
-    res.status(403);
+    res.status(400);
     res.end();
   } else {
     // complete req.body is the job object
@@ -55,7 +96,7 @@ router.put('/jobs/:id', CORS(), function (req, res, next) {
 
 /* delete a job */
 // perms needed: isAdmin
-router.delete('/jobs/:id', CORS(), function (req, res, next) {
+router.delete('/jobs/:id', CORS(), authenticate, Right('admin'), function (req, res, next) {
   if (isNaN(req.params.id)) {
     res.status(403);
     res.end();
@@ -74,7 +115,7 @@ router.delete('/jobs/:id', CORS(), function (req, res, next) {
 
 /* add a new job */
 // perms needed: bearerToken for full access (passed by firealarm)
-router.post('/jobs', CORS(), function (req, res, next) {
+router.post('/jobs', CORS(), authenticate, Right('admin'), function (req, res, next) {
   // complete req.body is the job object
   if (req.body) {
     new Jobs().addJob(req.body, function (err, addedJob) {
@@ -96,7 +137,16 @@ router.options('/verifyemail', CORS()); // enable pre-flight
 
 // perms needed: -
 // needs denial of service or misuse of service protection
+
+let sendNextEmailNotBefore = moment();
+
 router.post('/verifyemail', CORS(), function (req, res, next) {
+  // prevent misuse of sending emails
+  let now = moment();
+  if (now.isBefore(sendNextEmailNotBefore)) {
+    return res.status(429).end();
+  }
+
   let data = req.body;
   if (_.isString(data['email']) && _.isString(data['name'])) {
     // console.log(JSON.stringify(data, null, 2));
@@ -105,6 +155,11 @@ router.post('/verifyemail', CORS(), function (req, res, next) {
       if (existingUser === undefined || (existingUser && existingUser.state === 'new')) {
         u.createUser(data.name, data.email).then(user => {
           // console.log("New user: " + JSON.stringify(user, null, 2));
+
+          // allow sending email again earliest in 5 minutes
+          sendNextEmailNotBefore = moment();
+          sendNextEmailNotBefore.add(5, 'minutes');
+
           _sendVerificationEmail(data.email, `${req.headers.origin}/#/setupauth3?name=${data.name}&email=${data.email}`)
               .then(() => {
                 res.status(200).end();
@@ -217,7 +272,7 @@ router.get('/usersecret', CORS(), function (req, res, next) {
 router.options('/users', CORS()); // enable pre-flight
 
 // perms needed: isAdmin
-router.get('/users', CORS(), function (req, res, next) {
+router.get('/users', CORS(), authenticate, Right('admin'), function (req, res, next) {
   new Users().getAll()
       .then(users => {
         res.json(users);
@@ -231,7 +286,7 @@ router.get('/users', CORS(), function (req, res, next) {
 router.options('/user/:name', CORS()); // enable pre-flight
 
 // perms needed: isAdmin
-router.get('/user/:name', CORS(), function (req, res, next) {
+router.get('/user/:name', CORS(), authenticate, Right('admin'), function (req, res, next) {
   const name = req.params.name;
   new Users().getUserByName(name)
       .then(user => {
@@ -248,7 +303,7 @@ router.get('/user/:name', CORS(), function (req, res, next) {
 });
 
 // perms needed: isAdmin
-router.put('/user/:name', CORS(), function (req, res, next) {
+router.put('/user/:name', CORS(), authenticate, Right('admin'), function (req, res, next) {
   const name = req.params.name;
   let u = new Users();
   u.getUserByName(name)
@@ -276,7 +331,7 @@ router.put('/user/:name', CORS(), function (req, res, next) {
 });
 
 // perms needed: isAdmin
-router.delete('/user/:name', CORS(), function (req, res, next) {
+router.delete('/user/:name', CORS(), authenticate, Right('admin'), function (req, res, next) {
   const name = req.params.name;
   let u = new Users();
   u.getUserByName(name)

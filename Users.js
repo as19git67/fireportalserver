@@ -148,15 +148,7 @@ _.extend(Users.prototype, {
             if (error) {
               reject(error);
             } else {
-              tokenData.accessRights = [];
-              if (user.isAdmin) {
-                tokenData.accessRights.push('admin');
-                tokenData.accessRights.push('read');
-              } else {
-                if (user.canRead) {
-                  tokenData.accessRights.push('read');
-                }
-              }
+              tokenData.accessRights = self.getAccessRights(user);
               resolve(tokenData);
             }
           });
@@ -165,6 +157,42 @@ _.extend(Users.prototype, {
         throw new Error("User does not exist");
       }
     }
+  },
+
+  verifyTokenAndGetUser: async function (name, token) {
+    let data = await this._initFile();
+    let user = data.users[name];
+    if (user) {
+      if (user.state === 'provisioned') {
+        if (user.accessToken === token) {
+          let now = moment();
+          if (now.isAfter(user.accessTokenExpiresAfter)) {
+            throw {message: 'access token expired', status: 401};
+          } else {
+            return _.pick(user, 'name', 'email', 'state', 'canRead', 'isAdmin', 'expiredAfter');
+          }
+        } else {
+          throw {message: 'invalid access token', status: 401};
+        }
+      } else {
+        throw {message: 'user is not provisioned', status: 401};
+      }
+    } else {
+      throw new {message: "user does not exist", status: 401};
+    }
+  },
+
+  getAccessRights: function (user) {
+    let accessRights = [];
+    if (user.isAdmin) {
+      accessRights.push('admin');
+      accessRights.push('read');
+    } else {
+      if (user.canRead) {
+        accessRights.push('read');
+      }
+    }
+    return accessRights;
   },
 
   getAll: async function () {
@@ -262,6 +290,8 @@ _.extend(Users.prototype, {
     }
     const self = this;
     let data = await this._initFile();
+    // todo don't allow deleting the last administrator
+    // todo don't allow deleting self
     delete data.users[name];
     return new Promise((resolve, reject) => {
       jf.writeFile(self.filename, data, function (error) {
