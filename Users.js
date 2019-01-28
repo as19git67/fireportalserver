@@ -301,8 +301,15 @@ _.extend(Users.prototype, {
     }
     const self = this;
     let data = await this._initFile();
-    // todo don't allow deleting the last administrator
-    // todo don't allow deleting self
+    let user = data.users[name];
+    if (user.isAdmin) {
+      let otherAdmin = _.find(data.users, function (u) {
+        return u.isAdmin && u.name !== user.name;
+      });
+      if (!otherAdmin) {
+        throw new Error("Can't delete last administrator");
+      }
+    }
     delete data.users[name];
     return new Promise((resolve, reject) => {
       jf.writeFile(self.filename, data, function (error) {

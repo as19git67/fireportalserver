@@ -334,6 +334,9 @@ router.put('/user/:name', CORS(), authenticate, Right('admin'), function (req, r
 // perms needed: isAdmin
 router.delete('/user/:name', CORS(), authenticate, Right('admin'), function (req, res, next) {
   const name = req.params.name;
+  if (req.user.name === name) {
+    res.status(401).send("Can't delete self");
+  }
   let u = new Users();
   u.getUserByName(name)
       .then(user => {
