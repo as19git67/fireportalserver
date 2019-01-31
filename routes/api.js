@@ -311,6 +311,14 @@ router.put('/user/:name', CORS(), authenticate, Right('admin'), function (req, r
       .then(user => {
         if (user) {
           let newUserData = _.pick(req.body, 'email', 'state', 'isAdmin', 'canRead');
+
+          if (req.user.name === name) { // modifying own user data?
+            if (user.isAdmin && !newUserData.isAdmin) {
+              res.status(423).send("Can't set self to non administrator");
+              return;
+            }
+          }
+
           let updateUser = _.extend(user, newUserData);
 
           u.saveUser(updateUser)
@@ -335,7 +343,7 @@ router.put('/user/:name', CORS(), authenticate, Right('admin'), function (req, r
 router.delete('/user/:name', CORS(), authenticate, Right('admin'), function (req, res, next) {
   const name = req.params.name;
   if (req.user.name === name) {
-    res.status(401).send("Can't delete self");
+    res.status(423).send("Can't delete self");
   }
   let u = new Users();
   u.getUserByName(name)

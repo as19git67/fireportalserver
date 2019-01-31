@@ -7,7 +7,7 @@ const Users = require('./Users');
 module.exports.init = function (passport, callback) {
 
   passport.use(new BearerStrategy(async function (accessToken, done) {
-    console.log('Bearer Strategy with token ' + accessToken);
+    // console.log('Bearer Strategy with token ' + accessToken);
     console.log('BEARER Strategy');
 
     const info = {scope: '*'};

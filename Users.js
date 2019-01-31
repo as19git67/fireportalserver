@@ -45,6 +45,9 @@ _.extend(Users.prototype, {
   },
 
   createUser: async function (username, email) {
+    if (username === 'undefined' || !username) {
+      throw new Error('username undefined');
+    }
     const self = this;
     let existingUser = await this.getUserByName(username);
     if (existingUser) {
@@ -86,6 +89,9 @@ _.extend(Users.prototype, {
   },
 
   getUserByName: async function (name) {
+    if (name === 'undefined') {
+      throw new Error('undefined name');
+    }
     let data = await this._initFile();
     const user = data.users[name];
     if (user) {
@@ -100,6 +106,9 @@ _.extend(Users.prototype, {
   },
 
   getUserSecretByName: async function (name, issuer) {
+    if (name === 'undefined') {
+      throw new Error('undefined name');
+    }
     let data = await this._initFile();
     const user = data.users[name];
     if (user) {
@@ -112,6 +121,9 @@ _.extend(Users.prototype, {
   },
 
   verifyCode: async function (name, code) {
+    if (name === 'undefined' || !name) {
+      throw new Error('undefined name');
+    }
     let data = await this._initFile();
     const user = data.users[name];
     if (user) {
@@ -138,6 +150,9 @@ _.extend(Users.prototype, {
   },
 
   verifyCodeAndCreateAccessTokenForUser: async function (name, code) {
+    if (name === 'undefined' || !name) {
+      throw new Error('undefined name');
+    }
 
     let codeOk = await this.verifyCode(name, code);
     if (codeOk) {
@@ -170,6 +185,12 @@ _.extend(Users.prototype, {
 
   verifyTokenAndGetUser: async function (name, token, newToo) {
     let data = await this._initFile();
+    if (name === 'undefined' || !name) {
+      throw {message: 'undefined name', status: 401};
+    }
+    if (!token) {
+      throw {message: 'invalid access token', status: 401};
+    }
     let user = data.users[name];
     if (user) {
       if (newToo || user.state === 'provisioned') {
@@ -233,6 +254,9 @@ _.extend(Users.prototype, {
 
   _addUser: async function (name, email, secretData, tokenData) {
     const self = this;
+    if (name === 'undefined' || !name) {
+      throw new Error('undefined name');
+    }
     let data = await this._initFile();
     if (data.users[name]) {
       throw new Error("Can't add existing user");
@@ -263,6 +287,9 @@ _.extend(Users.prototype, {
 
   /* updates user information - without secret and otpCounter */
   saveUser: async function (user) {
+    if (!user) {
+      throw new Error('undefined user');
+    }
     if (!user.name) {
       const err = "ERROR: attempt to save incomplete user";
       console.log(err);
