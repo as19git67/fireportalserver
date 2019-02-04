@@ -37,22 +37,12 @@ _.extend(Jobs.prototype, {
 
   addJob: function (job, callback) {
     const self = this;
-    if (job && job.id !== undefined) {
-      this.getJobById(job.id, function (err, existingJob) {
-        if (err) {
-          callback(err);
-        } else {
-          if (existingJob) {
-            callback("Can't create job " + id + ", because it already exists");
-          } else {
-            self._addJob(job, function (err, addedJob) {
-              callback(err, addedJob);
-            });
-          }
-        }
+    if (job) {
+      self._addJob(job, function (err, addedJob) {
+        callback(err, addedJob);
       });
     } else {
-      callback("job is undefined or has no id");
+      callback("job is undefined");
     }
   },
 

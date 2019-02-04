@@ -11,9 +11,20 @@ const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+const WebSocket = require('ws');
 
 let server;
 let port;
+
+function _startWebSockets() {
+  const wss = new WebSocket.Server({server});
+  app.set('wss', wss);
+  wss.on('connection', function connection(ws) {
+    ws.on('message', function incoming(message) {
+      console.log('received websocket messaage: %s', message);
+    });
+  });
+}
 
 app.doInitialConfig().then(function () {
   port = config.get('httpsPort');
@@ -27,6 +38,7 @@ app.doInitialConfig().then(function () {
       };
       // Create HTTPS server
       server = https.createServer(secureOptions, app);
+      _startWebSockets();
 
       // Listen on provided port, on all network interfaces.
       server.listen(port, function () {
@@ -45,6 +57,7 @@ app.doInitialConfig().then(function () {
       app.set('port', port);
       // Create HTTP server
       server = http.createServer(app);
+      _startWebSockets();
 
       // Listen on provided port, on all network interfaces.
       server.listen(port, function () {

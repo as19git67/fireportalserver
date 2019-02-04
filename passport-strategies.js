@@ -10,19 +10,24 @@ module.exports.init = function (passport, callback) {
     // console.log('Bearer Strategy with token ' + accessToken);
     console.log('BEARER Strategy');
 
+    let u = new Users();
     const info = {scope: '*'};
         const bearers = config.get('bearerTokens');
-    let username = bearers[accessToken];
-        if (username) {
-          const user = {name: username};
-          done(null, user, info);
+    let user = bearers[accessToken];
+
+    if (user) {
+      let now = moment();
+      if (now.isAfter(user.expiredAfter)) {
+        return done({message: 'bearer token expired ', status: 401});
+      } else {
+        return done(null, {name: user.name, accessRights: u.getAccessRights(user)}, info);
+      }
         } else {
           if (accessToken.indexOf('.') > 0) {
             try {
               let parts = accessToken.split('.');
               let token = parts[0];
-              username = Buffer.from(parts[1], 'base64').toString('latin1');
-              let u = new Users();
+              let username = Buffer.from(parts[1], 'base64').toString('latin1');
               let user = await u.verifyTokenAndGetUser(username, token);
               return done(null, {name: username, accessRights: u.getAccessRights(user)}, info);
             } catch (ex) {
@@ -31,7 +36,6 @@ module.exports.init = function (passport, callback) {
           }
           return done({message: 'invalid bearer token', status: 401});
         }
-
       }
   ));
 

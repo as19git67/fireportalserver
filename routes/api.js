@@ -8,8 +8,10 @@ const _ = require('underscore');
 const config = require('../config');
 const moment = require('moment');
 const nodemailer = require('nodemailer');
+const formidable = require('formidable');
 const Jobs = require('../Jobs');
 const Users = require('../Users');
+const WebSocket = require('ws');
 
 function authenticate(req, res, next) {
   // check for bearer authentication header with token
@@ -116,21 +118,98 @@ router.delete('/jobs/:id', CORS(), authenticate, Right('admin'), function (req, 
 /* add a new job */
 // perms needed: bearerToken for full access (passed by firealarm)
 router.post('/jobs', CORS(), authenticate, Right('admin'), function (req, res, next) {
-  // complete req.body is the job object
-  if (req.body) {
-    new Jobs().addJob(req.body, function (err, addedJob) {
-      if (err) {
-        console.log("ERROR adding new job: ", err);
-        res.status(500);
-        res.send('Error while adding new job data');
+  let form = new formidable.IncomingForm();
+
+  form.parse(req, function (err, fields, files) {
+    let allJobPromises = [];
+
+    _.each(_.keys(files), function (key) {
+      let file = files[key];
+      console.log("Received file: " + file.name + ' (' + file.type + ')');
+
+      if (file.type === 'image/png') {
+        let data = fs.readFileSync(file.path);
+        let debugSavePrintfiles = config.get('debugSavePrintfiles');
+        if (debugSavePrintfiles) {
+          if (fs.existsSync(debugSavePrintfiles)) {
+            let fullFilepath = path.join(debugSavePrintfiles, file.name);
+            if (!path.extname(fullFilepath)) {
+              switch (file.type) {
+              case 'image/png':
+                fullFilepath = fullFilepath + '.png';
+                break;
+              case 'text/plain':
+                fullFilepath = fullFilepath + '.txt';
+                break;
+              }
+            }
+            fs.writeFile(fullFilepath, data, function (err) {
+              if (err) {
+                console.log("Error writing fullFilepath: ", err);
+              } else {
+                console.log(fullFilepath + " stored for debugging purposes");
+              }
+            });
+          } else {
+            console.log("WARNING: " + debugSavePrintfiles + " does not exist. Files to print are not stored for debugging purposes.");
+          }
+        }
+
+        let p = new Promise(function (resolve, reject) {
+          // todo: process image data and save it to the job
+          resolve();
+        });
+        allJobPromises.push(p);
       } else {
-        res.json(addedJob);
+        console.log('Skip ' + file.name + ' because of unsupported mime type (' + file.type + ')');
       }
     });
-  } else {
-    res.status(400);
-    res.end();
-  }
+    Promise.all(allJobPromises)
+        .then(() => {
+          let job = {
+            start: moment(),
+            end: undefined,
+            title: "Einsatz",
+            number: fields.number,
+            keyword: fields.keyword,
+            catchword: fields.catchword,
+            longitude: fields.longitude,
+            latitude: fields.latitude,
+            street: fields.street,
+            streetnumber: fields.streetnumber,
+            city: fields.city,
+            object: fields.object,
+            resource: fields.resource,
+            plan: fields.plan,
+            images: fields.images,
+            attendees: fields.attendees
+          };
+          new Jobs().addJob(job, function (err, addedJob) {
+            if (err) {
+              console.log("ERROR adding new job: ", err);
+              res.status(500);
+              res.send('Error while adding new job data');
+            } else {
+              res.json(addedJob);
+
+              // notify all clients
+              const wss = req.app.get('wss');
+              if (wss) {
+                wss.clients.forEach(function each(client) {
+                  if (client.readyState === WebSocket.OPEN) {
+                    client.send('newJob');
+                  }
+                });
+              }
+
+            }
+          });
+        })
+        .catch(reason => {
+          res.status(500).json({error: reason.message});
+        });
+
+  });
 });
 
 router.options('/verifyemail', CORS()); // enable pre-flight
