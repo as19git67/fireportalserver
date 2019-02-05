@@ -71,6 +71,8 @@ router.get('/jobs', CORS(), authenticate, Right('read'), function (req, res, nex
   });
 });
 
+router.options('/jobs/:id', CORS()); // enable pre-flight
+
 /* update a job */
 // perms needed: isAdmin
 router.put('/jobs/:id', CORS(), authenticate, Right('admin'), function (req, res, next) {
