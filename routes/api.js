@@ -159,6 +159,8 @@ router.post('/jobs', CORS(), authenticate, Right('admin'), function (req, res, n
 
         let p = new Promise(function (resolve, reject) {
           // todo: process image data and save it to the job
+
+          let imageAsData = "data:image/png;base64, " + data.toString('base64');
           resolve();
         });
         allJobPromises.push(p);
