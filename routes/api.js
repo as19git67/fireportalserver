@@ -123,14 +123,15 @@ router.post('/jobs', CORS(), authenticate, Right('admin'), function (req, res, n
   let form = new formidable.IncomingForm();
 
   form.parse(req, function (err, fields, files) {
-    let allJobPromises = [];
 
-    _.each(_.keys(files), function (key) {
-      let file = files[key];
+    let images = {};
+    let file = files.alarmfax;
+    if (file) {
       console.log("Received file: " + file.name + ' (' + file.type + ')');
 
       if (file.type === 'image/png') {
         let data = fs.readFileSync(file.path);
+
         let debugSavePrintfiles = config.get('debugSavePrintfiles');
         if (debugSavePrintfiles) {
           if (fs.existsSync(debugSavePrintfiles)) {
@@ -157,61 +158,49 @@ router.post('/jobs', CORS(), authenticate, Right('admin'), function (req, res, n
           }
         }
 
-        let p = new Promise(function (resolve, reject) {
-          // todo: process image data and save it to the job
-
-          let imageAsData = "data:image/png;base64, " + data.toString('base64');
-          resolve();
-        });
-        allJobPromises.push(p);
+        images.fax = "data:image/png;base64, " + data.toString('base64');
       } else {
         console.log('Skip ' + file.name + ' because of unsupported mime type (' + file.type + ')');
       }
-    });
-    Promise.all(allJobPromises)
-        .then(() => {
-          let job = {
-            start: moment(),
-            end: undefined,
-            title: "Einsatz",
-            number: fields.number,
-            keyword: fields.keyword,
-            catchword: fields.catchword,
-            longitude: fields.longitude,
-            latitude: fields.latitude,
-            street: fields.street,
-            streetnumber: fields.streetnumber,
-            city: fields.city,
-            object: fields.object,
-            resource: fields.resource,
-            plan: fields.plan,
-            images: fields.images,
-            attendees: fields.attendees
-          };
-          new Jobs().addJob(job, function (err, addedJob) {
-            if (err) {
-              console.log("ERROR adding new job: ", err);
-              res.status(500);
-              res.send('Error while adding new job data');
-            } else {
-              res.json(addedJob);
+    }
+    let job = {
+      start: moment(),
+      end: undefined,
+      title: "Einsatz",
+      number: fields.number,
+      keyword: fields.keyword,
+      catchword: fields.catchword,
+      longitude: fields.longitude,
+      latitude: fields.latitude,
+      street: fields.street,
+      streetnumber: fields.streetnumber,
+      city: fields.city,
+      object: fields.object,
+      resource: fields.resource,
+      plan: fields.plan,
+      images: images,
+      attendees: fields.attendees
+    };
+    new Jobs().addJob(job, function (err, addedJob) {
+      if (err) {
+        console.log("ERROR adding new job: ", err);
+        res.status(500);
+        res.send('Error while adding new job data');
+      } else {
+        res.json(addedJob);
 
-              // notify all clients
-              const wss = req.app.get('wss');
-              if (wss) {
-                wss.clients.forEach(function each(client) {
-                  if (client.readyState === WebSocket.OPEN) {
-                    client.send('newJob');
-                  }
-                });
-              }
-
+        // notify all clients
+        const wss = req.app.get('wss');
+        if (wss) {
+          wss.clients.forEach(function each(client) {
+            if (client.readyState === WebSocket.OPEN) {
+              client.send('newJob');
             }
           });
-        })
-        .catch(reason => {
-          res.status(500).json({error: reason.message});
-        });
+        }
+
+      }
+    });
 
   });
 });
