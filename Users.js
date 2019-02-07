@@ -81,7 +81,8 @@ _.extend(Users.prototype, {
         email: user.email,
         state: user.state,
         canRead: user.canRead,
-        isAdmin: user.isAdmin
+        isAdmin: user.isAdmin,
+        isAutologin: user.isAutologin
       };
     } else {
       console.log("User with email ", email, " does not exist.");
@@ -100,7 +101,8 @@ _.extend(Users.prototype, {
         email: user.email,
         state: user.state,
         canRead: user.canRead,
-        isAdmin: user.isAdmin
+        isAdmin: user.isAdmin,
+        isAutologin: user.isAutologin
       };
     }
   },
@@ -157,15 +159,18 @@ _.extend(Users.prototype, {
     let codeOk = await this.verifyCode(name, code);
     if (codeOk) {
       const tokenValue = hat().toString('base64');
-      const tokenData = {
-        accessToken: tokenValue,
-        accessTokenExpiresAfter: moment().add(this.tokenLifetimeInMinutes, 'minutes')
-      };
-
       const self = this;
       let data = await this._initFile();
       let user = data.users[name];
       if (user) {
+        const tokenData = {
+          accessToken: tokenValue,
+        };
+        if (user.isAutologin) {
+          tokenData.accessTokenExpiresAfter = moment("9999-12-31");
+        } else {
+          tokenData.accessTokenExpiresAfter = moment().add(this.tokenLifetimeInMinutes, 'minutes')
+        }
         _.extend(user, {accessToken: tokenData.accessToken, accessTokenExpiresAfter: tokenData.accessTokenExpiresAfter});
         return new Promise((resolve, reject) => {
           jf.writeFile(self.filename, data, function (error) {
@@ -244,6 +249,7 @@ _.extend(Users.prototype, {
           state: user.state,
           canRead: user.canRead,
           isAdmin: user.isAdmin,
+          isAutologin: user.isAutologin,
           expiredAfter: user.expiredAfter
         };
       });
@@ -268,6 +274,7 @@ _.extend(Users.prototype, {
         state: 'new',
         canRead: false,
         isAdmin: false,
+        isAutologin: false,
         expiredAfter: secretData.expiredAfter,
         accessToken: tokenData.accessToken,
         accessTokenExpiresAfter: tokenData.accessTokenExpiresAfter
@@ -298,7 +305,7 @@ _.extend(Users.prototype, {
     const self = this;
     let data = await this._initFile();
     if (data.users[user.name]) {
-      _.extend(data.users[user.name], _.pick(user, 'name', 'email', 'state', 'canRead', 'isAdmin', 'expiredAfter'));
+      _.extend(data.users[user.name], _.pick(user, 'name', 'email', 'state', 'canRead', 'isAdmin', 'isAutologin', 'expiredAfter'));
       return new Promise((resolve, reject) => {
         jf.writeFile(self.filename, data, function (error) {
           if (error) {
@@ -311,6 +318,7 @@ _.extend(Users.prototype, {
               state: savedUser.state,
               canRead: savedUser.canRead,
               isAdmin: savedUser.isAdmin,
+              isAutologin: savedUser.isAutologin,
               expiredAfter: savedUser.expiredAfter
             });
           }
