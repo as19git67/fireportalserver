@@ -164,10 +164,11 @@ _.extend(Users.prototype, {
       let user = data.users[name];
       if (user) {
         const tokenData = {
-          accessToken: tokenValue,
+          accessToken: tokenValue
         };
         if (user.isAutologin) {
           tokenData.accessTokenExpiresAfter = moment("9999-12-31");
+          tokenData.isAutologin = true
         } else {
           tokenData.accessTokenExpiresAfter = moment().add(this.tokenLifetimeInMinutes, 'minutes')
         }

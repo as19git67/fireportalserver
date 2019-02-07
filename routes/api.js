@@ -382,7 +382,7 @@ router.put('/user/:name', CORS(), authenticate, Right('admin'), function (req, r
   u.getUserByName(name)
       .then(user => {
         if (user) {
-          let newUserData = _.pick(req.body, 'email', 'state', 'isAdmin', 'canRead');
+          let newUserData = _.pick(req.body, 'email', 'state', 'isAdmin', 'canRead', 'isAutologin');
 
           if (req.user.name === name) { // modifying own user data?
             if (user.isAdmin && !newUserData.isAdmin) {
