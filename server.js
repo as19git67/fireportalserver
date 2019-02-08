@@ -15,6 +15,7 @@ const WebSocket = require('ws');
 
 let server;
 let port;
+let certPath;
 
 function _startWebSockets() {
   const wss = new WebSocket.Server({server});
@@ -28,13 +29,17 @@ function _startWebSockets() {
 
 app.doInitialConfig().then(function () {
   port = config.get('httpsPort');
+  certPath = config.get('certPath');
+  if (!certPath) {
+    certPath = __dirname;
+  }
 
   if (port) {
     app.set('port', port);
     try {
       const secureOptions = {
-        key: fs.readFileSync(path.resolve(__dirname, 'key.pem')),
-        cert: fs.readFileSync(path.resolve(__dirname, 'cert.pem'))
+        key: fs.readFileSync(path.resolve(certPath, 'key.pem')),
+        cert: fs.readFileSync(path.resolve(certPath, 'cert.pem'))
       };
       // Create HTTPS server
       server = https.createServer(secureOptions, app);
