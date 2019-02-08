@@ -228,9 +228,9 @@ router.post('/verifyemail', CORS(), function (req, res, next) {
         u.createUser(data.name, data.email).then(user => {
           // console.log("New user: " + JSON.stringify(user, null, 2));
 
-          // allow sending email again earliest in 5 minutes
+          // allow sending email again earliest in 1 minute
           sendNextEmailNotBefore = moment();
-          sendNextEmailNotBefore.add(5, 'minutes');
+          sendNextEmailNotBefore.add(1, 'minutes');
 
           _sendVerificationEmail(data.email,
               `${req.headers.origin}/#/setupauth3?name=${data.name}&email=${data.email}&token=${user.accessToken}`)
