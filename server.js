@@ -24,14 +24,14 @@ function _startWebSockets(server) {
 }
 
 app.doInitialConfig().then(function () {
-  let port = config.get('httpsPort');
+  let httpsPort = config.get('httpsPort');
   let certPath = config.get('certPath');
   if (!certPath) {
     certPath = __dirname;
   }
 
-  if (port) {
-    app.set('httpsPort', port);
+  if (httpsPort) {
+    app.set('httpsPort', httpsPort);
     try {
       const secureOptions = {
         key: fs.readFileSync(path.resolve(certPath, 'key.pem')),
@@ -42,8 +42,8 @@ app.doInitialConfig().then(function () {
       _startWebSockets(httpsServer);
 
       // Listen on provided port, on all network interfaces.
-      httpsServer.listen(port, function () {
-        console.log(app.get('appName') + ' https server listening on port ' + port);
+      httpsServer.listen(httpsPort, function () {
+        console.log(app.get('appName') + ' https server listening on port ' + httpsPort);
       });
       httpsServer.on('error', onError);
       httpsServer.on('listening', function () {
@@ -53,17 +53,17 @@ app.doInitialConfig().then(function () {
       console.log("EXCEPTION while creating the https server:", e);
     }
   }
-  port = config.get('httpPort');
+  let httpPort = config.get('httpPort');
   //const httpPort = normalizePort(process.env.PORT || '3000');
-  if (port) {
-    app.set('httpPort', port);
+  if (httpPort) {
+    app.set('httpPort', httpPort);
     // Create HTTP server
     let httpServer = http.createServer(app);
     _startWebSockets(httpServer);
 
     // Listen on provided port, on all network interfaces.
-    httpServer.listen(port, function () {
-      console.log(app.get('appName') + ' http server listening on port ' + port);
+    httpServer.listen(httpPort, function () {
+      console.log(app.get('appName') + ' http server listening on port ' + httpPort);
     });
     httpServer.on('error', onError);
     httpServer.on('listening', function () {
