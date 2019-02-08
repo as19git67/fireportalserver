@@ -13,11 +13,7 @@ const fs = require('fs');
 const path = require('path');
 const WebSocket = require('ws');
 
-let server;
-let port;
-let certPath;
-
-function _startWebSockets() {
+function _startWebSockets(server) {
   const wss = new WebSocket.Server({server});
   app.set('wss', wss);
   wss.on('connection', function connection(ws) {
@@ -28,51 +24,52 @@ function _startWebSockets() {
 }
 
 app.doInitialConfig().then(function () {
-  port = config.get('httpsPort');
-  certPath = config.get('certPath');
+  let port = config.get('httpsPort');
+  let certPath = config.get('certPath');
   if (!certPath) {
     certPath = __dirname;
   }
 
   if (port) {
-    app.set('port', port);
+    app.set('httpsPort', port);
     try {
       const secureOptions = {
         key: fs.readFileSync(path.resolve(certPath, 'key.pem')),
         cert: fs.readFileSync(path.resolve(certPath, 'cert.pem'))
       };
       // Create HTTPS server
-      server = https.createServer(secureOptions, app);
-      _startWebSockets();
+      let httpsServer = https.createServer(secureOptions, app);
+      _startWebSockets(httpsServer);
 
       // Listen on provided port, on all network interfaces.
-      server.listen(port, function () {
+      httpsServer.listen(port, function () {
         console.log(app.get('appName') + ' https server listening on port ' + port);
       });
-      server.on('error', onError);
-      server.on('listening', onListening);
+      httpsServer.on('error', onError);
+      httpsServer.on('listening', function () {
+        onListening(httpsServer)
+      });
     } catch (e) {
       console.log("EXCEPTION while creating the https server:", e);
     }
-  } else {
-    // no https -> try http
-    port = process.env.PORT || config.get('httpPort');
-    //const httpPort = normalizePort(process.env.PORT || '3000');
-    if (port) {
-      app.set('port', port);
-      // Create HTTP server
-      server = http.createServer(app);
-      _startWebSockets();
-
-      // Listen on provided port, on all network interfaces.
-      server.listen(port, function () {
-        console.log(app.get('appName') + ' http server listening on port ' + port);
-      });
-      server.on('error', onError);
-      server.on('listening', onListening);
-    }
   }
+  port = config.get('httpPort');
+  //const httpPort = normalizePort(process.env.PORT || '3000');
+  if (port) {
+    app.set('httpPort', port);
+    // Create HTTP server
+    let httpServer = http.createServer(app);
+    _startWebSockets(httpServer);
 
+    // Listen on provided port, on all network interfaces.
+    httpServer.listen(port, function () {
+      console.log(app.get('appName') + ' http server listening on port ' + port);
+    });
+    httpServer.on('error', onError);
+    httpServer.on('listening', function () {
+      onListening(httpServer)
+    });
+  }
 }).catch(reason => {
   console.log(reason);
   console.log("Not starting web-server, because initial configuration failed.");
@@ -130,7 +127,7 @@ function onError(error) {
  * Event listener for HTTP server "listening" event.
  */
 
-function onListening() {
+function onListening(server) {
   const addr = server.address();
   let bind = typeof addr === 'string'
              ? 'pipe ' + addr
