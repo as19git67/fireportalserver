@@ -129,23 +129,27 @@ _.extend(Users.prototype, {
     let data = await this._initFile();
     const user = data.users[name];
     if (user) {
-      let tokenValidates = speakeasy.totp.verify({
-        secret: user.secret,
-        encoding: 'base32',
-        token: code,
-        window: 6
+      return new Promise((resolve, reject) => {
+        setTimeout(function () {
+          let tokenValidates = speakeasy.totp.verify({
+            secret: user.secret,
+            encoding: 'base32',
+            token: code,
+            window: 6
+          });
+
+          if (process.env.NODE_ENV === 'development' && code === '000000') {
+            console.log("WARNING: token validation bypassed for debugging");
+            resolve(true);
+          }
+
+          if (tokenValidates) {
+            resolve(true);
+          } else {
+            reject('Code verification failed');
+          }
+        }, 10 * 1000);
       });
-
-      if (process.env.NODE_ENV === 'development' && code === '000000') {
-        console.log("WARNING: token validation bypassed for debugging");
-        return true;
-      }
-
-      if (tokenValidates) {
-        return true;
-      } else {
-        throw new Error('Code verification failed')
-      }
     } else {
       throw new Error('Unknown user');
     }

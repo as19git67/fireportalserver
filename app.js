@@ -27,6 +27,16 @@ app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'dist')));  // serve vue client app
 app.use(express.static(path.join(__dirname, 'certbot')));  // serve static files for let's encrypt
 
+app.use(function (req, res, next) {
+  if (req.secure || process.env.NODE_ENV === 'development') {
+    // request was via https or server runs in a dev environment ->no special handling
+    next();
+  } else {
+    // request was via http, so redirect to https
+    res.redirect('https://' + req.headers.host + req.url);
+  }
+});
+
 app.use('/api', apiRouter);
 
 // catch 404 and forward to error handler

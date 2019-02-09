@@ -13,6 +13,21 @@ const Jobs = require('../Jobs');
 const Users = require('../Users');
 const WebSocket = require('ws');
 
+let corsOptions = {
+  origin: false
+};
+
+// allow cors only when in development environment
+if (process.env.NODE_ENV === 'development') {
+  corsOptions = {
+    origin: ["http://localhost:8080", "https://localhost:8080"],
+    methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+    // allowedHeaders: ['Content-Type', 'Authorization', 'Location'],
+    preflightContinue: false,
+    optionsSuccessStatus: 204
+  };
+}
+
 function authenticate(req, res, next) {
   // check for bearer authentication header with token
   let token = '';
@@ -56,11 +71,11 @@ let Right = function (right) {
   };
 };
 
-router.options('/jobs', CORS()); // enable pre-flight
+router.options('/jobs', CORS(corsOptions)); // enable pre-flight
 
 /* get all jobs */
 // perms needed: canRead
-router.get('/jobs', CORS(), authenticate, Right('read'), function (req, res, next) {
+router.get('/jobs', CORS(corsOptions), authenticate, Right('read'), function (req, res, next) {
   new Jobs().getAll(function (err, jobs) {
     if (err) {
       console.log("ERROR getting jobs: ", err);
@@ -71,11 +86,11 @@ router.get('/jobs', CORS(), authenticate, Right('read'), function (req, res, nex
   });
 });
 
-router.options('/jobs/:id', CORS()); // enable pre-flight
+router.options('/jobs/:id', CORS(corsOptions)); // enable pre-flight
 
 /* update a job */
 // perms needed: isAdmin
-router.put('/jobs/:id', CORS(), authenticate, Right('admin'), function (req, res, next) {
+router.put('/jobs/:id', CORS(corsOptions), authenticate, Right('admin'), function (req, res, next) {
   if (isNaN(req.params.id)) {
     res.status(400);
     res.end();
@@ -100,7 +115,7 @@ router.put('/jobs/:id', CORS(), authenticate, Right('admin'), function (req, res
 
 /* delete a job */
 // perms needed: isAdmin
-router.delete('/jobs/:id', CORS(), authenticate, Right('admin'), function (req, res, next) {
+router.delete('/jobs/:id', CORS(corsOptions), authenticate, Right('admin'), function (req, res, next) {
   if (isNaN(req.params.id)) {
     res.status(403);
     res.end();
@@ -119,7 +134,7 @@ router.delete('/jobs/:id', CORS(), authenticate, Right('admin'), function (req, 
 
 /* add a new job */
 // perms needed: bearerToken for full access (passed by firealarm)
-router.post('/jobs', CORS(), authenticate, Right('admin'), function (req, res, next) {
+router.post('/jobs', CORS(corsOptions), authenticate, Right('admin'), function (req, res, next) {
   let form = new formidable.IncomingForm();
 
   form.parse(req, function (err, fields, files) {
@@ -260,10 +275,10 @@ router.post('/verifyemail', CORS(), function (req, res, next) {
   }
 });
 
-router.options('/verifycode', CORS()); // enable pre-flight
+router.options('/verifycode', CORS(corsOptions)); // enable pre-flight
 
 // perms needed: - , code and name must fit
-router.post('/verifycode', CORS(), function (req, res, next) {
+router.post('/verifycode', CORS(corsOptions), function (req, res, next) {
   let data = req.body;
 
   if (_.isString(data['code']) && _.isString(data['name'])) {
@@ -307,10 +322,10 @@ router.post('/verifycode', CORS(), function (req, res, next) {
   }
 });
 
-router.options('/usersecret', CORS()); // enable pre-flight
+router.options('/usersecret', CORS(corsOptions)); // enable pre-flight
 
 // perms needed: -, name and email must fit, state must be 'new'
-router.get('/usersecret', CORS(), function (req, res, next) {
+router.get('/usersecret', CORS(corsOptions), function (req, res, next) {
   let name = req.query.name;
   let email = req.query.email;
   let token = req.query.token;
@@ -342,10 +357,10 @@ router.get('/usersecret', CORS(), function (req, res, next) {
   }
 });
 
-router.options('/users', CORS()); // enable pre-flight
+router.options('/users', CORS(corsOptions)); // enable pre-flight
 
 // perms needed: isAdmin
-router.get('/users', CORS(), authenticate, Right('admin'), function (req, res, next) {
+router.get('/users', CORS(corsOptions), authenticate, Right('admin'), function (req, res, next) {
   new Users().getAll()
       .then(users => {
         res.json(users);
@@ -356,10 +371,10 @@ router.get('/users', CORS(), authenticate, Right('admin'), function (req, res, n
       });
 });
 
-router.options('/user/:name', CORS()); // enable pre-flight
+router.options('/user/:name', CORS(corsOptions)); // enable pre-flight
 
 // perms needed: isAdmin
-router.get('/user/:name', CORS(), authenticate, Right('admin'), function (req, res, next) {
+router.get('/user/:name', CORS(corsOptions), authenticate, Right('admin'), function (req, res, next) {
   const name = req.params.name;
   new Users().getUserByName(name)
       .then(user => {
@@ -376,7 +391,7 @@ router.get('/user/:name', CORS(), authenticate, Right('admin'), function (req, r
 });
 
 // perms needed: isAdmin
-router.put('/user/:name', CORS(), authenticate, Right('admin'), function (req, res, next) {
+router.put('/user/:name', CORS(corsOptions), authenticate, Right('admin'), function (req, res, next) {
   const name = req.params.name;
   let u = new Users();
   u.getUserByName(name)
@@ -412,7 +427,7 @@ router.put('/user/:name', CORS(), authenticate, Right('admin'), function (req, r
 });
 
 // perms needed: isAdmin
-router.delete('/user/:name', CORS(), authenticate, Right('admin'), function (req, res, next) {
+router.delete('/user/:name', CORS(corsOptions), authenticate, Right('admin'), function (req, res, next) {
   const name = req.params.name;
   if (req.user.name === name) {
     res.status(423).send("Can't delete self");
