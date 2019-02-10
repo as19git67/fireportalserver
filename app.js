@@ -28,6 +28,17 @@ app.use(express.static(path.join(__dirname, 'dist')));  // serve vue client app
 app.use(express.static(path.join(__dirname, 'certbot')));  // serve static files for let's encrypt
 
 app.use(function (req, res, next) {
+  // disallow all php requests
+  if (req.url.endsWith('.php')) {
+    res.status(403).end();
+    return;
+  }
+  // some other request no abort
+  if (req.url.endsWith('manager/html')) {
+    res.status(403).end();
+    return;
+  }
+
   if (req.secure || process.env.NODE_ENV === 'development') {
     // request was via https or server runs in a dev environment ->no special handling
     if (req.secure) {
@@ -38,7 +49,7 @@ app.use(function (req, res, next) {
   } else {
     // request was via http, so redirect to https
     const secUrl = 'https://' + req.headers.host + req.url;
-    console.log("Redirecting to https: " + secUrl);
+    console.log("Redirecting " + req.origin + " to https: " + secUrl);
     res.redirect(secUrl);
   }
 });
