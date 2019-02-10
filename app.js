@@ -43,12 +43,12 @@ app.use(function (req, res, next) {
     if (req.secure) {
       console.log("Request is already https - next()");
     }
-    console.log("Running in " + process.env.NODE_ENV + " mode. Allow " + req.headers.origin + req.url);
+    console.log("Running in " + process.env.NODE_ENV + " mode. Allow " + req.protocol + '://' + req.get('host') + req.url);
     next();
   } else {
     // request was via http, so redirect to https
     const secUrl = 'https://' + req.headers.host + req.url;
-    console.log("Redirecting " + +req.headers.origin + req.url + " to https: " + secUrl);
+    console.log("Redirecting " + req.protocol + '://' + req.get('host') + req.url + " to https: " + secUrl);
     res.redirect(secUrl);
   }
 });
