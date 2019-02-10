@@ -30,10 +30,18 @@ app.use(express.static(path.join(__dirname, 'certbot')));  // serve static files
 app.use(function (req, res, next) {
   if (req.secure || process.env.NODE_ENV === 'development') {
     // request was via https or server runs in a dev environment ->no special handling
+    if (req.secure) {
+      console.log("Request is already https - next()");
+    }
+    if (req.secure) {
+      console.log("Running in development mode - next()");
+    }
     next();
   } else {
     // request was via http, so redirect to https
-    res.redirect('https://' + req.headers.host + req.url);
+    const secUrl = 'https://' + req.headers.host + req.url
+    console.log("Redirecting to https: " + secUrl)
+    res.redirect(secUrl);
   }
 });
 
