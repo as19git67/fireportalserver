@@ -48,7 +48,7 @@ app.use(function (req, res, next) {
   } else {
     // request was via http, so redirect to https
     const secUrl = 'https://' + req.headers.host + req.url;
-    console.log("Redirecting " + req.origin + " to https: " + secUrl);
+    console.log("Redirecting " + req.headers.origin + " to https: " + secUrl);
     res.redirect(secUrl);
   }
 });
