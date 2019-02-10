@@ -24,7 +24,6 @@ app.use(logger('dev'));
 app.use(express.json());
 app.use(express.urlencoded({extended: false}));
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'dist')));  // serve vue client app
 app.use(express.static(path.join(__dirname, 'certbot')));  // serve static files for let's encrypt
 
 app.use(function (req, res, next) {
@@ -53,6 +52,8 @@ app.use(function (req, res, next) {
     res.redirect(secUrl);
   }
 });
+
+app.use(express.static(path.join(__dirname, 'dist')));  // serve vue client app
 
 app.use('/api', apiRouter);
 
