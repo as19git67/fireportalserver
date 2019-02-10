@@ -33,9 +33,7 @@ app.use(function (req, res, next) {
     if (req.secure) {
       console.log("Request is already https - next()");
     }
-    if (req.secure) {
-      console.log("Running in development mode - next()");
-    }
+    console.log("Running in " + process.env.NODE_ENV + " mode - next()");
     next();
   } else {
     // request was via http, so redirect to https
