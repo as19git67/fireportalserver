@@ -24,7 +24,7 @@ app.use(logger('short'));
 app.use(express.json());
 app.use(express.urlencoded({extended: false}));
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'assets')));  // serve static files with assets
+//app.use('/assets', express.static(path.join(__dirname, 'assets')));  // serve static files with assets
 app.use(express.static(path.join(__dirname, 'certbot')));  // serve static files for let's encrypt
 
 app.use(function (req, res, next) {
