@@ -11,6 +11,7 @@ const nodemailer = require('nodemailer');
 const formidable = require('formidable');
 const Jobs = require('../Jobs');
 const Users = require('../Users');
+const Staff = require('../Staff');
 const WebSocket = require('ws');
 
 let corsOptions = {
@@ -70,6 +71,22 @@ let Right = function (right) {
     }
   };
 };
+
+router.options('/staff', CORS(corsOptions)); // enable pre-flight
+
+/* get all jobs */
+// perms needed: canRead
+router.get('/staff', CORS(corsOptions), authenticate, Right('read'), function (req, res, next) {
+  const groupId = "21204";
+  new Staff().getAll(groupId)
+      .then(staff => {
+        res.json(staff);
+      })
+      .catch(reason => {
+        console.log("ERROR getting staff: ", reason);
+        res.status(500).end();
+      });
+});
 
 router.options('/jobs', CORS(corsOptions)); // enable pre-flight
 

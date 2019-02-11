@@ -20,7 +20,7 @@ app.set('appName', 'Firealarm Portal Server');
 const passport = require('passport');
 const passportStrategies = require('./passport-strategies');
 
-app.use(logger('dev'));
+app.use(logger('short'));
 app.use(express.json());
 app.use(express.urlencoded({extended: false}));
 app.use(cookieParser());
@@ -33,6 +33,11 @@ app.use(function (req, res, next) {
     return;
   }
   // some other request no abort
+  if (!req.headers || !req.headers.host) {
+    res.status(403).end();
+    return;
+  }
+
   if (req.url.endsWith('manager/html')) {
     res.status(403).end();
     return;
