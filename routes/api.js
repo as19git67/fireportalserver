@@ -115,7 +115,6 @@ async function updateJob(jobId, req) {
       return _.pick(attendee, 'id', 'lastname', 'firstname');
     });
   }
-  console.log("NEW JOB DATA: ", newJobData);
   let jobToSave = _.extend(originalJob, newJobData);
   let updatedJob = await j.saveJob(jobToSave);
   return updatedJob;
