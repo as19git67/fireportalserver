@@ -11,3 +11,7 @@ node_modules/
 /jobs Kopie.json
 /settings.json
 /dist/
+/cert.pem
+/key.pem
+/staff.json
+/users Kopie.json
