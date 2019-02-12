@@ -13,176 +13,166 @@ _.extend(Jobs.prototype, {
   initialize: function () {
   },
 
-  _initFile: function (callback) {
+  _initFile: async function () {
     const self = this;
-    fs.exists(this.filename, function (exists) {
-      if (!exists) {
-        let data = {jobs: {}, sequence: 0};
-        jf.writeFile(self.filename, data, function (err) {
-          if (err) {
-            throw new Error(err);
-          }
-          callback(data);
-        });
-      } else {
-        jf.readFile(self.filename, function (err, data) {
-          if (err) {
-            throw new Error(err);
-          }
-          callback(data);
-        });
-      }
+    return new Promise((resolve, reject) => {
+      fs.exists(this.filename, function (exists) {
+        if (!exists) {
+          let data = {jobs: {}};
+          jf.writeFile(self.filename, data, function (err) {
+            if (err) {
+              reject(err);
+            } else {
+              resolve(data);
+            }
+          });
+
+        } else {
+          jf.readFile(self.filename, function (err, data) {
+            if (err) {
+              reject(err);
+            } else {
+              resolve(data)
+            }
+          });
+        }
+      });
     });
   },
 
-  addJob: function (job, callback) {
-    const self = this;
+  addJob: async function (job) {
     if (job) {
-      self._addJob(job, function (err, addedJob) {
-        callback(err, addedJob);
-      });
+      let addedJob = await this._addJob(job);
+      return addedJob;
     } else {
-      callback("job is undefined");
+      throw new Error("job is undefined");
     }
   },
 
-  getJobById: function (id, callback) {
-    const self = this;
-    this._initFile(function (data) {
-      //const job = _.findWhere(data.jobs, {id: id});
-      const job = data.jobs[id];
-      if (job) {
-        callback(null, _.pick(job, 'id', 'start', 'end', 'title', 'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city',
-            'object', 'resource', 'plan', 'images', 'attendees', 'report'));
-      } else {
-        callback(null, null);
-      }
-    });
+  getJobById: async function (id) {
+    let data = await this._initFile();
+    const job = data.jobs[id];
+    if (job) {
+      let jobData = _.pick(job, 'id', 'start', 'end', 'title', 'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city',
+          'object', 'resource', 'plan', 'images', 'attendees', 'report');
+      jobData.id = id;
+      return jobData;
+    }
   },
 
   /* return all jobs as array, sorted by start */
-  getAll: function (callback) {
-    this._initFile(function (data) {
-      if (data) {
-        let jobs = _.map(data.jobs, function (job, key) {
-          let oneJob = _.pick(job, 'start', 'end', 'title', 'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city',
-              'object', 'resource', 'plan', 'images', 'attendees', 'report');
-          oneJob.id = key;
-          return oneJob;
-        });
-        callback(null, _.sortBy(jobs, 'start'));
-      } else {
-        callback(null, []);
-      }
-    });
+  getAll: async function () {
+    let data = await this._initFile();
+    if (data) {
+      let jobs = _.map(data.jobs, function (job, key) {
+        let oneJob = _.pick(job, 'start', 'end', 'title', 'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city',
+            'object', 'resource', 'plan', 'images', 'attendees', 'report');
+        oneJob.id = key;
+        return oneJob;
+      });
+      return _.sortBy(jobs, 'start');
+    } else {
+      return [];
+    }
   },
 
-  _addJob: function (start, end, title, number, keyword, catchword, longitude, latitude, street, streetnumber, city, object, resource, plan, images, attendees,
-      callback) {
-    const self = this;
-    this._initFile(function (data) {
-      const id = data.sequence;
-      data.sequence++;
-      let job;
+  _addJob: async function (start, end, title, number, keyword, catchword, longitude, latitude, street, streetnumber, city, object, resource, plan, images,
+      attendees) {
+    let data = await this._initFile();
+    const id = data.sequence;
+    data.sequence++;
+    let job;
 
-      if (_.isObject(start)) {
-        let o = start;
-        callback = end;
-        job = {
-          start: o.start,
-          end: o.end,
-          title: o.title,
-          number: o.number,
-          keyword: o.keyword,
-          catchword: o.catchword,
-          longitude: o.longitude,
-          latitude: o.latitude,
-          street: o.street,
-          streetnumber: o.streetnumber,
-          city: o.city,
-          object: o.object,
-          resource: o.resource,
-          plan: o.plan,
-          images: o.images,
-          attendees: o.attendees
-        };
-      } else {
-        job = {
-          start: start,
-          end: end,
-          title: title,
-          number: number,
-          keyword: keyword,
-          catchword: catchword,
-          longitude: longitude,
-          latitude: latitude,
-          street: street,
-          streetnumber: streetnumber,
-          city: city,
-          object: object,
-          resource: resource,
-          plan: plan,
-          images: images,
-          attendees: attendees
-        };
-      }
-      data.jobs[id] = job;
+    if (_.isObject(start)) {
+      let o = start;
+      job = {
+        start: o.start,
+        end: o.end,
+        title: o.title,
+        number: o.number,
+        keyword: o.keyword,
+        catchword: o.catchword,
+        longitude: o.longitude,
+        latitude: o.latitude,
+        street: o.street,
+        streetnumber: o.streetnumber,
+        city: o.city,
+        object: o.object,
+        resource: o.resource,
+        plan: o.plan,
+        images: o.images,
+        attendees: o.attendees
+      };
+    } else {
+      job = {
+        start: start,
+        end: end,
+        title: title,
+        number: number,
+        keyword: keyword,
+        catchword: catchword,
+        longitude: longitude,
+        latitude: latitude,
+        street: street,
+        streetnumber: streetnumber,
+        city: city,
+        object: object,
+        resource: resource,
+        plan: plan,
+        images: images,
+        attendees: attendees
+      };
+    }
+    data.jobs[id] = job;
 
-      jf.writeFile(self.filename, data, function (err) {
-        if (err) {
-          callback(err);
-        } else {
-          callback(null, job);
-        }
-      });
-    });
+    jf.writeFile(this.filename, data, {spaces: 2})
+        .then(() => {
+          return job;
+        })
+        .catch(reason => {
+          throw reason;
+        });
   },
 
   /* updates job information */
-  saveJob: function (job, callback) {
+  saveJob: async function (job) {
     if (job.id === undefined) {
       const err = "ERROR: attempt to save incomplete job";
       console.log(err);
-      callback(err);
-      return;
+      throw new Error(err);
     }
-    const self = this;
-    this._initFile(function (data) {
-      if (data.jobs[job.id]) {
-        _.extend(data.jobs[job.id],
-            _.pick(job, 'start', 'end', 'title', 'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city',
-                'object', 'resource', 'plan', 'images', 'attendees', 'report'));
-        jf.writeFile(self.filename, data, function (error) {
-          if (error) {
-            callback(error);
-          } else {
-            callback(null);
-          }
-        });
-      } else {
-        callback("Job does not exist")
-      }
-    });
+    let data = await this._initFile();
+    if (data.jobs[job.id]) {
+      _.extend(data.jobs[job.id],
+          _.pick(job, 'start', 'end', 'title', 'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city',
+              'object', 'resource', 'plan', 'images', 'attendees', 'report'));
+      jf.writeFile(this.filename, data, {spaces: 2})
+          .then(() => {
+            return job;
+          })
+          .catch(reason => {
+            throw reason;
+          });
+    } else {
+      throw new Error("Job does not exist")
+    }
   },
 
-  deleteJob: function (id, callback) {
+  deleteJob: async function (id) {
     if (id === undefined) {
       const err = "ERROR: attempt to delete job with undefined id";
       console.log(err);
-      callback(err);
-      return;
+      throw new Error(err);
     }
-    const self = this;
-    this._initFile(function (data) {
-      delete data.jobs[id];
-      jf.writeFile(self.filename, data, function (error) {
-        if (error) {
-          callback(error);
-        } else {
-          callback(null);
-        }
-      });
-    });
+    let data = await this._initFile();
+    delete data.jobs[id];
+    jf.writeFile(this.filename, data, {spaces: 2})
+        .then(() => {
+          return job;
+        })
+        .catch(reason => {
+          throw reason;
+        });
   }
 });
 

@@ -93,20 +93,36 @@ router.options('/jobs', CORS(corsOptions)); // enable pre-flight
 /* get all jobs */
 // perms needed: canRead
 router.get('/jobs', CORS(corsOptions), authenticate, Right('read'), function (req, res, next) {
-  new Jobs().getAll(function (err, jobs) {
-    if (err) {
-      console.log("ERROR getting jobs: ", err);
-      res.status(500).end();
-    } else {
-      res.json(jobs);
-    }
-  });
+  new Jobs().getAll()
+      .then(jobs => {
+        res.json(jobs);
+      })
+      .catch(reason => {
+        console.log("ERROR getting jobs: ", reason);
+        res.status(500).end();
+      });
 });
 
 router.options('/jobs/:id', CORS(corsOptions)); // enable pre-flight
 
-/* update a job */
+async function updateJob(jobId, req) {
+  let j = new Jobs();
+  let originalJob = await j.getJobById(jobId);
+  let newJobData = _.pick(req.body, 'id', 'start', 'end', 'title', 'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city',
+      'object', 'resource', 'plan', 'images', 'attendees', 'report');
+  if (newJobData.attendees) {
+    newJobData.attendees = _.map(newJobData.attendees, function (attendee) {
+      return _.pick(attendee, 'id', 'lastname', 'firstname');
+    });
+  }
+  console.log("NEW JOB DATA: ", newJobData);
+  let jobToSave = _.extend(originalJob, newJobData);
+  let updatedJob = await j.saveJob(jobToSave);
+  return updatedJob;
+}
+
 // perms needed: canWrite
+/* update a job */
 router.put('/jobs/:id', CORS(corsOptions), authenticate, Right('write'), function (req, res, next) {
   if (isNaN(req.params.id)) {
     res.status(400);
@@ -114,26 +130,26 @@ router.put('/jobs/:id', CORS(corsOptions), authenticate, Right('write'), functio
   } else {
     // complete req.body is the job object
     if (req.body) {
-      new Jobs().saveJob(req.body, function (err, updatedJob) {
-        if (err) {
-          console.log("ERROR saving job: ", err);
-          res.status(500);
-          res.send('Error while saving job data');
-        } else {
-          res.json(updatedJob);
+      const jobId = req.params.id;
+      updateJob(jobId, req)
+          .then(updatedJob => {
+            res.json(updatedJob);
 
-          // notify all clients
-          const wss = req.app.get('wss');
-          if (wss) {
-            wss.clients.forEach(function each(client) {
-              if (client.readyState === WebSocket.OPEN) {
-                client.send('updatedJob');
-              }
-            });
-          }
-
-        }
-      });
+            // notify all clients
+            const wss = req.app.get('wss');
+            if (wss) {
+              wss.clients.forEach(function each(client) {
+                if (client.readyState === WebSocket.OPEN) {
+                  client.send('updatedJob');
+                }
+              });
+            }
+          })
+          .catch(reason => {
+            console.log("ERROR saving job: ", reason);
+            res.status(500);
+            res.send('Error while saving job data');
+          });
     } else {
       res.status(400);
       res.end();
@@ -148,15 +164,15 @@ router.delete('/jobs/:id', CORS(corsOptions), authenticate, Right('admin'), func
     res.status(403);
     res.end();
   } else {
-    new Jobs().deleteJob(req.params.id, function (err) {
-      if (err) {
-        console.log(`ERROR deleting job with id: ${req.params.id}: ${err}`);
-        res.status(500);
-        res.send('Error deleting job data');
-      } else {
-        res.end();
-      }
-    });
+    new Jobs().deleteJob(req.params.id)
+        .then(() => {
+          res.end();
+        })
+        .catch(reason => {
+          console.log(`ERROR deleting job with id: ${req.params.id}: ${reason}`);
+          res.status(500);
+          res.send('Error deleting job data');
+        });
   }
 });
 
@@ -224,27 +240,23 @@ router.post('/jobs', CORS(corsOptions), authenticate, Right('admin'), function (
       images: images,
       attendees: fields.attendees
     };
-    new Jobs().addJob(job, function (err, addedJob) {
-      if (err) {
-        console.log("ERROR adding new job: ", err);
-        res.status(500);
-        res.send('Error while adding new job data');
-      } else {
-        res.json(addedJob);
+    new Jobs().addJob(job).then(addedJob => {
+      res.json(addedJob);
 
-        // notify all clients
-        const wss = req.app.get('wss');
-        if (wss) {
-          wss.clients.forEach(function each(client) {
-            if (client.readyState === WebSocket.OPEN) {
-              client.send('newJob');
-            }
-          });
-        }
-
+      // notify all clients
+      const wss = req.app.get('wss');
+      if (wss) {
+        wss.clients.forEach(function each(client) {
+          if (client.readyState === WebSocket.OPEN) {
+            client.send('newJob');
+          }
+        });
       }
+    }).catch(reason => {
+      console.log("ERROR adding new job: ", reason);
+      res.status(500);
+      res.send('Error while adding new job data');
     });
-
   });
 });
 

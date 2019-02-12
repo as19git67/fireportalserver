@@ -13,7 +13,7 @@ _.extend(Staff.prototype, {
   initialize: function () {
   },
 
-  _initFile: function () {
+  _initFile: async function () {
     const self = this;
     return new Promise((resolve, reject) => {
       fs.exists(this.filename, function (exists) {
