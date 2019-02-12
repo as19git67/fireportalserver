@@ -106,8 +106,8 @@ router.get('/jobs', CORS(corsOptions), authenticate, Right('read'), function (re
 router.options('/jobs/:id', CORS(corsOptions)); // enable pre-flight
 
 /* update a job */
-// perms needed: isAdmin
-router.put('/jobs/:id', CORS(corsOptions), authenticate, Right('admin'), function (req, res, next) {
+// perms needed: canWrite
+router.put('/jobs/:id', CORS(corsOptions), authenticate, Right('write'), function (req, res, next) {
   if (isNaN(req.params.id)) {
     res.status(400);
     res.end();
@@ -121,6 +121,17 @@ router.put('/jobs/:id', CORS(corsOptions), authenticate, Right('admin'), functio
           res.send('Error while saving job data');
         } else {
           res.json(updatedJob);
+
+          // notify all clients
+          const wss = req.app.get('wss');
+          if (wss) {
+            wss.clients.forEach(function each(client) {
+              if (client.readyState === WebSocket.OPEN) {
+                client.send('updatedJob');
+              }
+            });
+          }
+
         }
       });
     } else {
@@ -414,10 +425,10 @@ router.put('/user/:name', CORS(corsOptions), authenticate, Right('admin'), funct
   u.getUserByName(name)
       .then(user => {
         if (user) {
-          let newUserData = _.pick(req.body, 'email', 'state', 'isAdmin', 'canRead', 'isAutologin');
+          let newUserData = _.pick(req.body, 'email', 'state', 'isAdmin', 'canRead', 'canWrite', 'isAutologin');
 
           if (req.user.name === name) { // modifying own user data?
-            if (user.isAdmin && !newUserData.isAdmin) {
+            if (user.isAdmin && newUserData.isAdmin !== undefined && !newUserData.isAdmin) {
               res.status(423).send("Can't set self to non administrator");
               return;
             }

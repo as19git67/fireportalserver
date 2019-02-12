@@ -23,7 +23,7 @@ _.extend(Users.prototype, {
       fs.exists(this.filename, function (exists) {
         if (!exists) {
           let data = {users: {}};
-          jf.writeFile(self.filename, data, function (err) {
+          jf.writeFile(self.filename, data, {spaces: 2}, function (err) {
             if (err) {
               reject(err);
             } else {
@@ -81,6 +81,7 @@ _.extend(Users.prototype, {
         email: user.email,
         state: user.state,
         canRead: user.canRead,
+        canWrite: user.canWrite,
         isAdmin: user.isAdmin,
         isAutologin: user.isAutologin
       };
@@ -101,6 +102,7 @@ _.extend(Users.prototype, {
         email: user.email,
         state: user.state,
         canRead: user.canRead,
+        canWrite: user.canWrite,
         isAdmin: user.isAdmin,
         isAutologin: user.isAutologin
       };
@@ -130,25 +132,26 @@ _.extend(Users.prototype, {
     const user = data.users[name];
     if (user) {
       return new Promise((resolve, reject) => {
+        let tokenValidates = speakeasy.totp.verify({
+          secret: user.secret,
+          encoding: 'base32',
+          token: code,
+          window: 6
+        });
+
+        if (process.env.NODE_ENV === 'development' && code === '000000') {
+          console.log("WARNING: token validation bypassed for debugging");
+          resolve(true);
+          return;
+        }
+
         setTimeout(function () {
-          let tokenValidates = speakeasy.totp.verify({
-            secret: user.secret,
-            encoding: 'base32',
-            token: code,
-            window: 6
-          });
-
-          if (process.env.NODE_ENV === 'development' && code === '000000') {
-            console.log("WARNING: token validation bypassed for debugging");
-            resolve(true);
-          }
-
           if (tokenValidates) {
             resolve(true);
           } else {
             reject('Code verification failed');
           }
-        }, 10 * 1000);
+        }, 5 * 1000);
       });
     } else {
       throw new Error('Unknown user');
@@ -178,7 +181,7 @@ _.extend(Users.prototype, {
         }
         _.extend(user, {accessToken: tokenData.accessToken, accessTokenExpiresAfter: tokenData.accessTokenExpiresAfter});
         return new Promise((resolve, reject) => {
-          jf.writeFile(self.filename, data, function (error) {
+          jf.writeFile(self.filename, data, {spaces: 2}, function (error) {
             if (error) {
               reject(error);
             } else {
@@ -209,7 +212,7 @@ _.extend(Users.prototype, {
           if (now.isAfter(user.accessTokenExpiresAfter)) {
             throw {message: 'access token expired', status: 401};
           } else {
-            return _.pick(user, 'name', 'email', 'state', 'canRead', 'isAdmin', 'expiredAfter');
+            return _.pick(user, 'name', 'email', 'state', 'canRead', 'canWrite', 'isAdmin', 'expiredAfter');
           }
         } else {
           throw {message: 'invalid access token', status: 401};
@@ -227,9 +230,13 @@ _.extend(Users.prototype, {
     if (user.isAdmin) {
       accessRights.push('admin');
       accessRights.push('read');
+      accessRights.push('write');
     } else {
       if (user.canRead) {
         accessRights.push('read');
+      }
+      if (user.canWrite) {
+        accessRights.push('write');
       }
     }
     return accessRights;
@@ -253,6 +260,7 @@ _.extend(Users.prototype, {
           email: user.email,
           state: user.state,
           canRead: user.canRead,
+          canWrite: user.canWrite,
           isAdmin: user.isAdmin,
           isAutologin: user.isAutologin,
           expiredAfter: user.expiredAfter
@@ -278,6 +286,7 @@ _.extend(Users.prototype, {
         secret: secretData.secret,
         state: 'new',
         canRead: false,
+        canWrite: false,
         isAdmin: false,
         isAutologin: false,
         expiredAfter: secretData.expiredAfter,
@@ -286,7 +295,7 @@ _.extend(Users.prototype, {
       };
       data.users[user.name] = user;
       return new Promise((resolve, reject) => {
-        jf.writeFile(self.filename, data, function (error) {
+        jf.writeFile(self.filename, data, {spaces: 2}, function (error) {
           if (error) {
             reject(error);
           } else {
@@ -310,9 +319,9 @@ _.extend(Users.prototype, {
     const self = this;
     let data = await this._initFile();
     if (data.users[user.name]) {
-      _.extend(data.users[user.name], _.pick(user, 'name', 'email', 'state', 'canRead', 'isAdmin', 'isAutologin', 'expiredAfter'));
+      _.extend(data.users[user.name], _.pick(user, 'name', 'email', 'state', 'canRead', 'canWrite', 'isAdmin', 'isAutologin', 'expiredAfter'));
       return new Promise((resolve, reject) => {
-        jf.writeFile(self.filename, data, function (error) {
+        jf.writeFile(self.filename, data, {spaces: 2}, function (error) {
           if (error) {
             reject(error);
           } else {
@@ -322,6 +331,7 @@ _.extend(Users.prototype, {
               email: savedUser.email,
               state: savedUser.state,
               canRead: savedUser.canRead,
+              canWrite: savedUser.canWrite,
               isAdmin: savedUser.isAdmin,
               isAutologin: savedUser.isAutologin,
               expiredAfter: savedUser.expiredAfter
@@ -352,7 +362,7 @@ _.extend(Users.prototype, {
     }
     delete data.users[name];
     return new Promise((resolve, reject) => {
-      jf.writeFile(self.filename, data, function (error) {
+      jf.writeFile(self.filename, data, {spaces: 2}, function (error) {
         if (error) {
           reject(error);
         } else {
