@@ -1,5 +1,6 @@
 const createError = require('http-errors');
 const express = require('express');
+const helmet = require('helmet');
 const path = require('path');
 const cookieParser = require('cookie-parser');
 const logger = require('morgan');
@@ -12,6 +13,7 @@ const apiRouter = require('./routes/api');
 var app = express();
 
 app.set('appName', 'Firealarm Portal Server');
+app.use(helmet());
 
 // view engine setup
 // app.set('views', path.join(__dirname, 'views'));
