@@ -14,6 +14,15 @@ var app = express();
 
 app.set('appName', 'Firealarm Portal Server');
 app.use(helmet());
+//
+// app.use(helmet.contentSecurityPolicy({
+//   directives: {
+//     defaultSrc: ["'self'"],
+//     styleSrc: ["'self'", "'unsafe-inline'", 'fonts.googleapis.com', 'cdn.jsdelivr.net'],
+//     imgSrc: ["'self'", 'fonts.googleapis.com', 'cdn.jsdelivr.net'],
+//     fontSrc: ["'self'", 'fonts.googleapis.com', 'fonts.gstatic.com']
+//   }
+// }));
 
 // view engine setup
 // app.set('views', path.join(__dirname, 'views'));
