@@ -108,11 +108,15 @@ router.options('/jobs/:id', CORS(corsOptions)); // enable pre-flight
 async function updateJob(jobId, req) {
   let j = new Jobs();
   let originalJob = await j.getJobById(jobId);
-  let newJobData = _.pick(req.body, 'id', 'start', 'end', 'title', 'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city',
-      'object', 'resource', 'plan', 'images', 'attendees', 'report');
-  if (newJobData.attendees) {
-    newJobData.attendees = _.map(newJobData.attendees, function (attendee) {
+  let newJobData = _.pick(req.body, 'start', 'end', 'title', 'number');
+  if (req.body.attendees) {
+    newJobData.attendees = _.map(req.body.attendees, function (attendee) {
       return _.pick(attendee, 'id', 'lastname', 'firstname');
+    });
+  }
+  if (req.body.report) {
+    newJobData.report = _.map(req.body.report, function (report) {
+      return _.pick(report, 'incident', 'location', 'director', 'text', 'material', 'rescued', 'others', 'duration', 'staffcount', 'writer');
     });
   }
   let jobToSave = _.extend(originalJob, newJobData);
@@ -236,8 +240,9 @@ router.post('/jobs', CORS(corsOptions), authenticate, Right('admin'), function (
       object: fields.object,
       resource: fields.resource,
       plan: fields.plan,
-      images: images,
-      attendees: fields.attendees
+      // attendees: fields.attendees,
+      // report: fields.report,
+      images: images
     };
     new Jobs().addJob(job).then(addedJob => {
       res.json(addedJob);
