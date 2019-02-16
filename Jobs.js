@@ -125,13 +125,15 @@ _.extend(Jobs.prototype, {
     }
     data.jobs[id] = job;
 
-    jf.writeFile(this.filename, data, {spaces: 2})
-        .then(() => {
-          return job;
-        })
-        .catch(reason => {
-          throw reason;
-        });
+    return new Promise((resolve, reject) => {
+      jf.writeFile(this.filename, data, {spaces: 2})
+          .then(() => {
+            resolve(job);
+          })
+          .catch(reason => {
+            reject(reason);
+          });
+    });
   },
 
   /* updates job information */
@@ -146,13 +148,15 @@ _.extend(Jobs.prototype, {
       _.extend(data.jobs[job.id],
           _.pick(job, 'start', 'end', 'title', 'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city',
               'object', 'resource', 'plan', 'images', 'attendees', 'report'));
-      jf.writeFile(this.filename, data, {spaces: 2})
-          .then(() => {
-            return job;
-          })
-          .catch(reason => {
-            throw reason;
-          });
+      return new Promise((resolve, reject) => {
+        jf.writeFile(this.filename, data, {spaces: 2})
+            .then(() => {
+              resolve(job);
+            })
+            .catch(reason => {
+              reject(reason);
+            });
+      });
     } else {
       throw new Error("Job does not exist")
     }
@@ -166,13 +170,15 @@ _.extend(Jobs.prototype, {
     }
     let data = await this._initFile();
     delete data.jobs[id];
-    jf.writeFile(this.filename, data, {spaces: 2})
-        .then(() => {
-          return job;
-        })
-        .catch(reason => {
-          throw reason;
-        });
+    return new Promise((resolve, reject) => {
+      jf.writeFile(this.filename, data, {spaces: 2})
+          .then(() => {
+            resolve(id);
+          })
+          .catch(reason => {
+            reject(reason);
+          });
+    });
   }
 });
 
