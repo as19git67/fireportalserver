@@ -105,6 +105,25 @@ router.get('/jobs', CORS(corsOptions), authenticate, Right('read'), function (re
 
 router.options('/jobs/:id', CORS(corsOptions)); // enable pre-flight
 
+/* get a specific job */
+// perms needed: canRead
+router.get('/jobs/:id', CORS(corsOptions), authenticate, Right('read'), function (req, res, next) {
+  if (isNaN(req.params.id)) {
+    res.status(400);
+    res.end();
+  } else {
+    const jobId = req.params.id;
+    new Jobs().getJobById(jobId)
+        .then(job => {
+          res.json(job);
+        })
+        .catch(reason => {
+          console.log("ERROR getting job " + jobId + ": ", reason);
+          res.status(500).end();
+        });
+  }
+});
+
 async function updateJob(jobId, req) {
   let j = new Jobs();
   let originalJob = await j.getJobById(jobId);
@@ -115,9 +134,11 @@ async function updateJob(jobId, req) {
     });
   }
   if (req.body.report) {
-    newJobData.report = _.map(req.body.report, function (report) {
-      return _.pick(report, 'incident', 'location', 'director', 'text', 'material', 'rescued', 'others', 'duration', 'staffcount', 'writer');
-    });
+    if (!originalJob.report) {
+      originalJob.report = {};
+    }
+    newJobData.report = _.extend(originalJob.report,
+        _.pick(req.body.report, 'incident', 'location', 'director', 'text', 'material', 'rescued', 'recovered', 'others', 'duration', 'staffcount', 'writer'));
   }
   let jobToSave = _.extend(originalJob, newJobData);
   let updatedJob = await j.saveJob(jobToSave);
@@ -143,7 +164,7 @@ router.put('/jobs/:id', CORS(corsOptions), authenticate, Right('write'), functio
             if (wss) {
               wss.clients.forEach(function each(client) {
                 if (client.readyState === WebSocket.OPEN) {
-                  client.send('updatedJob');
+                  client.send('updatedJob:' + jobId);
                 }
               });
             }
