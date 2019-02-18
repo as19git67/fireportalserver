@@ -112,9 +112,13 @@ router.get('/jobs/:id', CORS(corsOptions), authenticate, Right('read'), function
     res.status(400);
     res.end();
   } else {
+    let complete = !!req.query.complete;
     const jobId = req.params.id;
     new Jobs().getJobById(jobId)
         .then(job => {
+          if (job && !complete) {
+            delete job.images
+          }
           res.json(job);
         })
         .catch(reason => {
@@ -157,6 +161,7 @@ router.put('/jobs/:id', CORS(corsOptions), authenticate, Right('write'), functio
       const jobId = req.params.id;
       updateJob(jobId, req)
           .then(updatedJob => {
+            delete updatedJob.images; // send back job without image, because that does not get updated
             res.json(updatedJob);
 
             // notify all clients

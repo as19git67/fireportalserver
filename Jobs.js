@@ -151,7 +151,7 @@ _.extend(Jobs.prototype, {
       return new Promise((resolve, reject) => {
         jf.writeFile(this.filename, data, {spaces: 2})
             .then(() => {
-              resolve(job);
+              resolve(data.jobs[job.id]);
             })
             .catch(reason => {
               reject(reason);
