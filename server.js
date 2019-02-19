@@ -54,23 +54,25 @@ app.doInitialConfig().then(function () {
     } catch (e) {
       console.log("EXCEPTION while creating the https server:", e);
     }
-  }
-  let httpPort = config.get('httpPort');
-  //const httpPort = normalizePort(process.env.PORT || '3000');
-  if (httpPort) {
-    app.set('httpPort', httpPort);
-    // Create HTTP server
-    let httpServer = http.createServer(app);
-    _startWebSockets(httpServer);
+  } else {
+    let httpPort = config.get('httpPort');
+    //const httpPort = normalizePort(process.env.PORT || '3000');
+    if (httpPort) {
+      app.set('httpPort', httpPort);
+      // Create HTTP server
+      let httpServer = http.createServer(app);
+      // note: websockets no more work if started for https and http at the same time
+      //_startWebSockets(httpServer);
 
-    // Listen on provided port, on all network interfaces.
-    httpServer.listen(httpPort, function () {
-      console.log(app.get('appName') + ' http server listening on port ' + httpPort);
-    });
-    httpServer.on('error', onError);
-    httpServer.on('listening', function () {
-      onListening(httpServer)
-    });
+      // Listen on provided port, on all network interfaces.
+      httpServer.listen(httpPort, function () {
+        console.log(app.get('appName') + ' http server listening on port ' + httpPort);
+      });
+      httpServer.on('error', onError);
+      httpServer.on('listening', function () {
+        onListening(httpServer)
+      });
+    }
   }
 }).catch(reason => {
   console.log(reason);
