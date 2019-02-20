@@ -1,0 +1,15 @@
+{
+  "staff": [
+    {
+      "id": 1,
+      "firstname": "Antonia",
+      "lastname": "Tryphaina",
+      "groupId": "31313"
+    }, {
+      "id": 2,
+      "firstname": "Balthasar",
+      "lastname": "Neumann",
+      "groupId": "31313"
+    }
+  ]
+}

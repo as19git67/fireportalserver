@@ -53,7 +53,8 @@ _.extend(Jobs.prototype, {
     let data = await this._initFile();
     const job = data.jobs[id];
     if (job) {
-      let jobData = _.pick(job, 'id', 'start', 'end', 'title', 'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city',
+      let jobData = _.pick(job, 'id', 'encrypted', 'start', 'end', 'title', 'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber',
+          'city',
           'object', 'resource', 'plan', 'images', 'attendees', 'report');
       jobData.id = id;
       return jobData;
@@ -65,7 +66,8 @@ _.extend(Jobs.prototype, {
     let data = await this._initFile();
     if (data) {
       let jobs = _.map(data.jobs, function (job, key) {
-        let oneJob = _.pick(job, 'start', 'end', 'title', 'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city',
+        let oneJob = _.pick(job, 'encrypted', 'start', 'end', 'title', 'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber',
+            'city',
             'object', 'resource', 'plan', 'images', 'attendees', 'report');
         oneJob.id = key;
         return oneJob;
@@ -76,16 +78,18 @@ _.extend(Jobs.prototype, {
     }
   },
 
-  _addJob: async function (start, end, title, number, keyword, catchword, longitude, latitude, street, streetnumber, city, object, resource, plan, images,
+  _addJob: async function (encrypted, start, end, title, number, keyword, catchword, longitude, latitude, street, streetnumber, city, object, resource, plan,
+      images,
       attendees) {
     let data = await this._initFile();
     const id = data.sequence;
     data.sequence++;
     let job;
 
-    if (_.isObject(start)) {
-      let o = start;
+    if (_.isObject(encrypted)) {
+      let o = encrypted;
       job = {
+        encrypted: o.encrypted,
         start: o.start,
         end: o.end,
         title: o.title,
@@ -105,6 +109,7 @@ _.extend(Jobs.prototype, {
       };
     } else {
       job = {
+        encrypted: encrypted,
         start: start,
         end: end,
         title: title,
@@ -146,7 +151,7 @@ _.extend(Jobs.prototype, {
     let data = await this._initFile();
     if (data.jobs[job.id]) {
       _.extend(data.jobs[job.id],
-          _.pick(job, 'start', 'end', 'title', 'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city',
+          _.pick(job, 'encrypted', 'start', 'end', 'title', 'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city',
               'object', 'resource', 'plan', 'images', 'attendees', 'report'));
       return new Promise((resolve, reject) => {
         jf.writeFile(this.filename, data, {spaces: 2})
@@ -170,6 +175,64 @@ _.extend(Jobs.prototype, {
     }
     let data = await this._initFile();
     delete data.jobs[id];
+    return new Promise((resolve, reject) => {
+      jf.writeFile(this.filename, data, {spaces: 2})
+          .then(() => {
+            resolve(id);
+          })
+          .catch(reason => {
+            reject(reason);
+          });
+    });
+  },
+
+  _encrypt(job, key) {
+    job.encrypted = true;
+    // todo encrypt
+    return job;
+  },
+
+  _decrypt(job, key) {
+    job.encrypted = false;
+    // todo decrypt
+    return job;
+  },
+
+  encryptJob: async function (id, key) {
+    if (id === undefined) {
+      const err = "ERROR: attempt to encrypt job with undefined id";
+      console.log(err);
+      throw new Error(err);
+    }
+    let data = await this._initFile();
+    let job = data.jobs[id];
+    if (!job) {
+      throw new Error('ERROR: attempt to encrypt unknown job');
+    }
+    data.jobs[id] = this._encrypt(job, key);
+    return new Promise((resolve, reject) => {
+      jf.writeFile(this.filename, data, {spaces: 2})
+          .then(() => {
+            resolve(id);
+          })
+          .catch(reason => {
+            reject(reason);
+          });
+    });
+  },
+
+  decryptJob: async function (id, key) {
+    if (id === undefined) {
+      const err = "ERROR: attempt to decrypt job with undefined id";
+      console.log(err);
+      throw new Error(err);
+    }
+    let data = await this._initFile();
+    let job = data.jobs[id];
+    if (!job) {
+      throw new Error('ERROR: attempt to decrypt unknown job');
+    }
+    data.jobs[id] = this._decrypt(job, key);
     return new Promise((resolve, reject) => {
       jf.writeFile(this.filename, data, {spaces: 2})
           .then(() => {

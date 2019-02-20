@@ -1,5 +1,24 @@
 {
-  "httpPort": 5005,
   "httpsPort": 5055,
-  "bearerTokens": {"insert_a_secret_token_here": "insert_token_name"}
+  "bearerTokens": {
+    "insert_your_secret_token_here": {
+      "name": "insert_username_here",
+      "canRead": true,
+      "isAdmin": true,
+      "expiredAfter": "2019-12-31T23:59:59.999Z"
+    },
+    "remove_this_token_if_not_used": {
+      "name": "user2",
+      "canRead": true,
+      "isAdmin": true,
+      "expiredAfter": "2018-12-31T23:59:59.999Z"
+    }
+  },
+  "email_smtp_sender_email": "alfred@example.com",
+  "email_smtp_username": "alfred@example.com",
+  "email_smtp_password": "insert_your_email_password_here",
+  "email_smtp_use_SSL": false,
+  "email_smtp_server_host": "outlook.office365.com",
+  "email_smtp_server_port": "587",
+  "debugSavePrintfiles": "/tmp/dbg"
 }
