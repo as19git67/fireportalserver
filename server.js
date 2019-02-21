@@ -61,8 +61,7 @@ app.doInitialConfig().then(function () {
       app.set('httpPort', httpPort);
       // Create HTTP server
       let httpServer = http.createServer(app);
-      // note: websockets no more work if started for https and http at the same time
-      //_startWebSockets(httpServer);
+      _startWebSockets(httpServer);
 
       // Listen on provided port, on all network interfaces.
       httpServer.listen(httpPort, function () {

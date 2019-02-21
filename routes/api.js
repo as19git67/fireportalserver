@@ -129,20 +129,33 @@ router.get('/jobs/:id', CORS(corsOptions), authenticate, Right('read'), function
 });
 
 async function updateJob(jobId, req) {
+  let newJobData;
+  let data = req.body;
   let j = new Jobs();
   let originalJob = await j.getJobById(jobId);
-  let newJobData = _.pick(req.body, 'start', 'end', 'title', 'number');
-  if (req.body.attendees) {
-    newJobData.attendees = _.map(req.body.attendees, function (attendee) {
-      return _.pick(attendee, 'id', 'lastname', 'firstname');
-    });
-  }
-  if (req.body.report) {
-    if (!originalJob.report) {
-      originalJob.report = {};
+  if (data.encrypted !== originalJob.encrypted) {
+    if (data.encrypted) {
+      // encrypt job data
+      let encryptedJob = await j.encryptJob(jobId);
+    } else {
+      // decrypt job data
     }
-    newJobData.report = _.extend(originalJob.report,
-        _.pick(req.body.report, 'incident', 'location', 'director', 'text', 'material', 'rescued', 'recovered', 'others', 'duration', 'staffcount', 'writer'));
+    throw new Error(403)
+  } else {
+    newJobData = _.pick(data, 'start', 'end', 'title', 'number', 'encrypted');
+    if (data.attendees) {
+      newJobData.attendees = _.map(data.attendees, function (attendee) {
+        return _.pick(attendee, 'id', 'lastname', 'firstname');
+      });
+    }
+    if (data.report) {
+      if (!originalJob.report) {
+        originalJob.report = {};
+      }
+      newJobData.report = _.extend(originalJob.report,
+          _.pick(req.body.report, 'incident', 'location', 'director', 'text', 'material', 'rescued', 'recovered', 'others', 'duration', 'staffcount',
+              'writer'));
+    }
   }
   let jobToSave = _.extend(originalJob, newJobData);
   let updatedJob = await j.saveJob(jobToSave);

@@ -88,6 +88,8 @@ nconf.defaults({
   "certPath": "",
   "keyFilename": "key.pem",
   "certFilename": "cert.pem",
+  "encryptKeyPath": "",
+  "encryptKeyFilename": "encryption_key.pem",
   "bearerTokens": {
     "token1": {"name": "user1", "canRead": true, "isAdmin": true, "expiredAfter": "2018-12-31T23:59:59.999Z"},
     "token2": {"name": "user2", "canRead": true, "isAdmin": true, "expiredAfter": "2018-12-31T23:59:59.999Z"}

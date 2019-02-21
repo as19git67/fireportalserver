@@ -1,7 +1,10 @@
 const fs = require('fs');
+const path = require('path');
 const jf = require('jsonfile');
 const _ = require('underscore');
 const moment = require('moment');
+const config = require('./config');
+const crypto = require('crypto');
 
 let Jobs = module.exports = function () {
   this.filename = "jobs.json";
@@ -186,19 +189,37 @@ _.extend(Jobs.prototype, {
     });
   },
 
-  _encrypt(job, key) {
+  _encrypt(job) {
+    let encryptKeyFilename = config.get('encryptKeyFilename');
+    let encryptionKeyPath = config.get('encryptKeyPath');
+    if (!encryptionKeyPath) {
+      encryptionKeyPath = __dirname;
+    }
+
+    let encryptionKey = fs.readFileSync(path.resolve(encryptionKeyPath, encryptKeyFilename));
+    _.each(['longitude', 'latitude', 'street', 'streetnumber', 'city', 'object', 'plan', 'attendees'], function (key) {
+      let o = job[key];
+      if (_.isObject(o)) {
+        o = JSON.stringify(o);
+      }
+      const buffer = Buffer.from(o);
+      let encrypted = crypto.publicEncrypt(encryptionKey, buffer);
+      let encryptedBase64 = encrypted.toString("base64");
+      console.log("Encrypted " + key + ": " + encryptedBase64);
+    });
+
     job.encrypted = true;
     // todo encrypt
     return job;
   },
 
-  _decrypt(job, key) {
+  _decrypt(job) {
     job.encrypted = false;
     // todo decrypt
     return job;
   },
 
-  encryptJob: async function (id, key) {
+  encryptJob: async function (id) {
     if (id === undefined) {
       const err = "ERROR: attempt to encrypt job with undefined id";
       console.log(err);
@@ -209,7 +230,7 @@ _.extend(Jobs.prototype, {
     if (!job) {
       throw new Error('ERROR: attempt to encrypt unknown job');
     }
-    data.jobs[id] = this._encrypt(job, key);
+    data.jobs[id] = this._encrypt(job);
     return new Promise((resolve, reject) => {
       jf.writeFile(this.filename, data, {spaces: 2})
           .then(() => {
@@ -221,7 +242,7 @@ _.extend(Jobs.prototype, {
     });
   },
 
-  decryptJob: async function (id, key) {
+  decryptJob: async function (id) {
     if (id === undefined) {
       const err = "ERROR: attempt to decrypt job with undefined id";
       console.log(err);
@@ -232,7 +253,7 @@ _.extend(Jobs.prototype, {
     if (!job) {
       throw new Error('ERROR: attempt to decrypt unknown job');
     }
-    data.jobs[id] = this._decrypt(job, key);
+    data.jobs[id] = this._decrypt(job);
     return new Promise((resolve, reject) => {
       jf.writeFile(this.filename, data, {spaces: 2})
           .then(() => {
