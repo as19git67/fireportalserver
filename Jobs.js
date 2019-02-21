@@ -189,31 +189,46 @@ _.extend(Jobs.prototype, {
     });
   },
 
-  _encrypt(job) {
+  _encrypt: async function(job) {
     let encryptKeyFilename = config.get('encryptKeyFilename');
     let encryptionKeyPath = config.get('encryptKeyPath');
     if (!encryptionKeyPath) {
       encryptionKeyPath = __dirname;
     }
+    return new Promise((resolve, reject) => {
+      let encryptionKey = fs.readFileSync(path.resolve(encryptionKeyPath, encryptKeyFilename));
 
-    let encryptionKey = fs.readFileSync(path.resolve(encryptionKeyPath, encryptKeyFilename));
-    _.each(['longitude', 'latitude', 'street', 'streetnumber', 'city', 'object', 'plan', 'attendees'], function (key) {
-      let o = job[key];
-      if (_.isObject(o)) {
-        o = JSON.stringify(o);
-      }
+      crypto.randomBytes(256, (err, buf) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        console.log(`${buf.length} bytes of random data: ${buf.toString('hex')}`);
+
       const buffer = Buffer.from(o);
       let encrypted = crypto.publicEncrypt(encryptionKey, buffer);
       let encryptedBase64 = encrypted.toString("base64");
       console.log("Encrypted " + key + ": " + encryptedBase64);
-    });
 
-    job.encrypted = true;
-    // todo encrypt
-    return job;
+      _.each(['longitude', 'latitude', 'street', 'streetnumber', 'city', 'object', 'plan', 'attendees'], function (key) {
+        let o = job[key];
+        if (_.isObject(o)) {
+          o = JSON.stringify(o);
+        }
+        const buffer = Buffer.from(o);
+        let encrypted = crypto.publicEncrypt(encryptionKey, buffer);
+        let encryptedBase64 = encrypted.toString("base64");
+        console.log("Encrypted " + key + ": " + encryptedBase64);
+      });
+
+      job.encrypted = true;
+      // todo encrypt
+      return job;
+      });
+    });
   },
 
-  _decrypt(job) {
+  _decrypt: async function (job){
     job.encrypted = false;
     // todo decrypt
     return job;

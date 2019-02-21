@@ -15,3 +15,6 @@ node_modules/
 /key.pem
 /staff.json
 /users Kopie.json
+/decryption_key.pem
+/encryption_key.pem
+/jobs - Kopie.json
