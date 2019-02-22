@@ -21,7 +21,7 @@ _.extend(Jobs.prototype, {
     return new Promise((resolve, reject) => {
       fs.exists(this.filename, function (exists) {
         if (!exists) {
-          let data = {jobs: {}};
+          let data = {jobs: {}, sequence: 0};
           jf.writeFile(self.filename, data, function (err) {
             if (err) {
               reject(err);
@@ -56,9 +56,9 @@ _.extend(Jobs.prototype, {
     let data = await this._initFile();
     const job = data.jobs[id];
     if (job) {
-      let jobData = _.pick(job, 'id', 'encrypted', 'start', 'end', 'title', 'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber',
-          'city',
-          'object', 'resource', 'plan', 'images', 'attendees', 'report');
+      let jobData = _.pick(job, 'id', 'encrypted', 'encryptedRandomBase64', 'encryptedData', 'start', 'end', 'title', 'number', 'keyword', 'catchword',
+          'longitude', 'latitude', 'street', 'streetnumber',
+          'city', 'object', 'resource', 'plan', 'images', 'attendees', 'report');
       jobData.id = id;
       return jobData;
     }
@@ -69,7 +69,8 @@ _.extend(Jobs.prototype, {
     let data = await this._initFile();
     if (data) {
       let jobs = _.map(data.jobs, function (job, key) {
-        let oneJob = _.pick(job, 'encrypted', 'start', 'end', 'title', 'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber',
+        let oneJob = _.pick(job, 'encrypted', 'encryptedRandomBase64', 'encryptedData', 'start', 'end', 'title', 'number', 'keyword', 'catchword', 'longitude',
+            'latitude', 'street', 'streetnumber',
             'city',
             'object', 'resource', 'plan', 'images', 'attendees', 'report');
         oneJob.id = key;
@@ -153,18 +154,22 @@ _.extend(Jobs.prototype, {
     }
     let data = await this._initFile();
     if (data.jobs[job.id]) {
-      _.extend(data.jobs[job.id],
-          _.pick(job, 'encrypted', 'start', 'end', 'title', 'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city',
-              'object', 'resource', 'plan', 'images', 'attendees', 'report'));
-      return new Promise((resolve, reject) => {
-        jf.writeFile(this.filename, data, {spaces: 2})
-            .then(() => {
-              resolve(data.jobs[job.id]);
-            })
-            .catch(reason => {
-              reject(reason);
-            });
-      });
+      if (data.jobs[job.id].encrypted) {
+        throw new Error('job is encrypted');
+      } else {
+        _.extend(data.jobs[job.id],
+            _.pick(job, 'encrypted', 'start', 'end', 'title', 'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city',
+                'object', 'resource', 'plan', 'images', 'attendees', 'report'));
+        return new Promise((resolve, reject) => {
+          jf.writeFile(this.filename, data, {spaces: 2})
+              .then(() => {
+                resolve(data.jobs[job.id]);
+              })
+              .catch(reason => {
+                reject(reason);
+              });
+        });
+      }
     } else {
       throw new Error("Job does not exist")
     }
@@ -189,7 +194,7 @@ _.extend(Jobs.prototype, {
     });
   },
 
-  _encrypt: async function(job) {
+  _encrypt: async function (job) {
     let encryptKeyFilename = config.get('encryptKeyFilename');
     let encryptionKeyPath = config.get('encryptKeyPath');
     if (!encryptionKeyPath) {
@@ -198,85 +203,127 @@ _.extend(Jobs.prototype, {
     return new Promise((resolve, reject) => {
       let encryptionKey = fs.readFileSync(path.resolve(encryptionKeyPath, encryptKeyFilename));
 
-      crypto.randomBytes(256, (err, buf) => {
+      crypto.randomBytes(32, (err, aesSecret) => {
         if (err) {
           reject(err);
           return;
         }
-        console.log(`${buf.length} bytes of random data: ${buf.toString('hex')}`);
+        // console.log(`${aesSecret.length} bytes of random data: ${aesSecret.toString('hex')}`);
 
-      const buffer = Buffer.from(o);
-      let encrypted = crypto.publicEncrypt(encryptionKey, buffer);
-      let encryptedBase64 = encrypted.toString("base64");
-      console.log("Encrypted " + key + ": " + encryptedBase64);
+        let encryptedRandom = crypto.publicEncrypt(encryptionKey, aesSecret);
+        job.encryptedRandomBase64 = encryptedRandom.toString("base64");
 
-      _.each(['longitude', 'latitude', 'street', 'streetnumber', 'city', 'object', 'plan', 'attendees'], function (key) {
-        let o = job[key];
-        if (_.isObject(o)) {
-          o = JSON.stringify(o);
-        }
-        const buffer = Buffer.from(o);
-        let encrypted = crypto.publicEncrypt(encryptionKey, buffer);
-        let encryptedBase64 = encrypted.toString("base64");
-        console.log("Encrypted " + key + ": " + encryptedBase64);
-      });
+        const keys = ['longitude', 'latitude', 'street', 'streetnumber', 'city', 'object', 'plan', 'attendees', 'images'];
+        const o = _.pick(job, keys);
+        const oStr = JSON.stringify(o);
 
-      job.encrypted = true;
-      // todo encrypt
-      return job;
+        // generate initialization vector
+        let iv = new Buffer.alloc(16); // fill with zeros
+
+        // encrypt data
+        let cipher = crypto.createCipheriv('aes-256-cbc', aesSecret, iv);
+        const buffer = Buffer.from(oStr);
+        let encryptedData = cipher.update(buffer, 'utf8', 'hex') + cipher.final('hex');
+
+        let encryptedJob = _.omit(job, keys);
+        encryptedJob.encrypted = true;
+        encryptedJob.encryptedData = encryptedData;
+        resolve(encryptedJob);
       });
     });
   },
 
-  _decrypt: async function (job){
-    job.encrypted = false;
-    // todo decrypt
-    return job;
-  },
-
-  encryptJob: async function (id) {
-    if (id === undefined) {
-      const err = "ERROR: attempt to encrypt job with undefined id";
-      console.log(err);
-      throw new Error(err);
+  _decrypt: async function (job) {
+    let decryptKeyFilename = config.get('decryptKeyFilename');
+    let encryptionKeyPath = config.get('encryptKeyPath');
+    if (!encryptionKeyPath) {
+      encryptionKeyPath = __dirname;
     }
-    let data = await this._initFile();
-    let job = data.jobs[id];
-    if (!job) {
-      throw new Error('ERROR: attempt to encrypt unknown job');
-    }
-    data.jobs[id] = this._encrypt(job);
     return new Promise((resolve, reject) => {
-      jf.writeFile(this.filename, data, {spaces: 2})
-          .then(() => {
-            resolve(id);
-          })
-          .catch(reason => {
-            reject(reason);
-          });
+      // todo: don't read this from file -> use it from application memory
+      let decryptionKey = fs.readFileSync(path.resolve(encryptionKeyPath, decryptKeyFilename));
+
+      const encryptedAesSecret = Buffer.from(job.encryptedRandomBase64, 'base64');
+      let aesSecret = crypto.privateDecrypt(decryptionKey, encryptedAesSecret);
+
+      // generate initialization vector
+      let iv = new Buffer.alloc(16); // fill with zeros
+
+      // decrypt data
+      let decipher = crypto.createDecipheriv('aes-256-cbc', aesSecret, iv);
+      const encryptedText = new Buffer(job.encryptedData, 'hex');
+      const decrypted = decipher.update(encryptedText, 'utf-8') + decipher.final('utf-8');
+      console.log(decrypted.toString());
+      try {
+        let decryptedJobData = JSON.parse(decrypted.toString());
+        job = _.omit(job, ['encryptedData', 'encryptedRandomBase64']);
+        job = _.extend(job, decryptedJobData, {encrypted: false});
+        resolve(job);
+      } catch (ex) {
+        reject(ex);
+      }
     });
   },
 
-  decryptJob: async function (id) {
-    if (id === undefined) {
-      const err = "ERROR: attempt to decrypt job with undefined id";
-      console.log(err);
-      throw new Error(err);
+  _prepareJobByIdOrObj: async function (id) {
+    let job, data;
+    if (_.isObject(id)) {
+      job = id; // job was passed instead id
+      if (job.id === undefined) {
+        throw new Error('job object has no id');
+      }
+      data = await this._initFile();
+    } else {
+      if (id === undefined) {
+        throw new Error('id is undefined');
+      }
+      data = await this._initFile();
+      job = data.jobs[id];
+      if (!job) {
+        throw new Error(`there is no job with id ${id}`);
+      }
+      job.id = id;
     }
-    let data = await this._initFile();
-    let job = data.jobs[id];
-    if (!job) {
-      throw new Error('ERROR: attempt to decrypt unknown job');
-    }
-    data.jobs[id] = this._decrypt(job);
-    return new Promise((resolve, reject) => {
-      jf.writeFile(this.filename, data, {spaces: 2})
-          .then(() => {
-            resolve(id);
-          })
-          .catch(reason => {
-            reject(reason);
-          });
+    return {job, data};
+  },
+
+  encryptJob: function (id) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        let {job, data} = await this._prepareJobByIdOrObj(id);
+        const encryptedJob = await this._encrypt(job);
+        data.jobs[job.id] = encryptedJob;
+        jf.writeFile(this.filename, data, {spaces: 2})
+            .then(() => {
+              resolve(encryptedJob);
+            })
+            .catch(reason => {
+              reject(reason);
+            });
+      } catch (ex) {
+        ex.message = `ERROR while encrypting job: ${ex.message}`;
+        reject(ex);
+      }
+    });
+  },
+
+  decryptJob: function (id) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        let {job, data} = await this._prepareJobByIdOrObj(id);
+        const decryptedJob = await this._decrypt(job);
+        data.jobs[job.id] = decryptedJob;
+        jf.writeFile(this.filename, data, {spaces: 2})
+            .then(() => {
+              resolve(decryptedJob);
+            })
+            .catch(reason => {
+              reject(reason);
+            });
+      } catch (ex) {
+        ex.message = `decrypting job: ${ex.message}`;
+        reject(ex);
+      }
     });
   }
 });

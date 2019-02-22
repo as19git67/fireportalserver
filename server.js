@@ -16,7 +16,8 @@ const WebSocket = require('ws');
 function _startWebSockets(server) {
   const wss = new WebSocket.Server({server});
   app.set('wss', wss);
-  wss.on('connection', function connection(ws) {
+  wss.on('connection', function connection(ws, req) {
+    console.log(`${req.connection.remoteAddress} connected to websocket`);
     ws.on('message', function incoming(message) {
       console.log('received websocket messaage: %s', message);
     });

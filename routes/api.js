@@ -133,28 +133,41 @@ async function updateJob(jobId, req) {
   let data = req.body;
   let j = new Jobs();
   let originalJob = await j.getJobById(jobId);
-  if (data.encrypted !== originalJob.encrypted) {
-    if (data.encrypted) {
+  if (data.encrypted !== undefined) {
+    if (data.encrypted && !originalJob.encrypted) {
       // encrypt job data
-      let encryptedJob = await j.encryptJob(jobId);
+      let encryptedJob = await j.encryptJob(originalJob);
+      return encryptedJob;
     } else {
-      // decrypt job data
+      if (!data.encrypted && originalJob.encrypted) {
+        // decrypt job data
+        let decryptedJob = await j.decryptJob(originalJob);
+        return decryptedJob;
+      } else {
+        console.log(`Warning: updateJob called with data.encrypted=${data.encrypted}, but job has already this state`);
+        return originalJob;
+      }
     }
-    throw new Error(403)
   } else {
-    newJobData = _.pick(data, 'start', 'end', 'title', 'number', 'encrypted');
+    if (originalJob.encrypted) {
+      throw new Error("can't update encrypted job");
+    }
+
+    const levelOneKeysOfPossibleChanges = ['start', 'end', 'title', 'number', 'encrypted'];
+    const attendeesKeysOfPossibleChanges = ['id', 'lastname', 'firstname'];
+    const reportKeysOfPossibleChanges = ['incident', 'location', 'director', 'text', 'material', 'rescued', 'recovered', 'others', 'duration', 'staffcount',
+      'writer'];
+    newJobData = _.pick(data, levelOneKeysOfPossibleChanges);
     if (data.attendees) {
       newJobData.attendees = _.map(data.attendees, function (attendee) {
-        return _.pick(attendee, 'id', 'lastname', 'firstname');
+        return _.pick(attendee, attendeesKeysOfPossibleChanges);
       });
     }
     if (data.report) {
       if (!originalJob.report) {
         originalJob.report = {};
       }
-      newJobData.report = _.extend(originalJob.report,
-          _.pick(req.body.report, 'incident', 'location', 'director', 'text', 'material', 'rescued', 'recovered', 'others', 'duration', 'staffcount',
-              'writer'));
+      newJobData.report = _.extend(originalJob.report, _.pick(req.body.report, reportKeysOfPossibleChanges));
     }
   }
   let jobToSave = _.extend(originalJob, newJobData);
@@ -162,8 +175,8 @@ async function updateJob(jobId, req) {
   return updatedJob;
 }
 
-// perms needed: canWrite
 /* update a job */
+// perms needed: canWrite
 router.put('/jobs/:id', CORS(corsOptions), authenticate, Right('write'), function (req, res, next) {
   if (isNaN(req.params.id)) {
     res.status(400);
@@ -174,23 +187,16 @@ router.put('/jobs/:id', CORS(corsOptions), authenticate, Right('write'), functio
       const jobId = req.params.id;
       updateJob(jobId, req)
           .then(updatedJob => {
-            delete updatedJob.images; // send back job without image, because that does not get updated
+            delete updatedJob.images; // send back job without image, because it does not get updated
             res.json(updatedJob);
 
             // notify all clients
-            const wss = req.app.get('wss');
-            if (wss) {
-              wss.clients.forEach(function each(client) {
-                if (client.readyState === WebSocket.OPEN) {
-                  client.send('updatedJob:' + jobId);
-                }
-              });
-            }
+            _pushUpdate(req, `updatedJob:${jobId}`);
           })
           .catch(reason => {
-            console.log("ERROR saving job: ", reason);
+            console.log(reason);
             res.status(500);
-            res.send('Error while saving job data');
+            res.send('Error while updating job');
           });
     } else {
       res.status(400);
@@ -284,13 +290,14 @@ router.post('/jobs', CORS(corsOptions), authenticate, Right('admin'), function (
       images: images
     };
     new Jobs().addJob(job).then(addedJob => {
-      res.json(addedJob);
+      res.json(addedJob.id);
 
       // notify all clients
       const wss = req.app.get('wss');
       if (wss) {
         wss.clients.forEach(function each(client) {
           if (client.readyState === WebSocket.OPEN) {
+            console.log(`Sending push to client ${client}`);
             client.send('newJob');
           }
         });
@@ -536,6 +543,21 @@ router.delete('/user/:name', CORS(corsOptions), authenticate, Right('admin'), fu
         res.status(500).end();
       });
 });
+
+function _pushUpdate(req, message) {
+  const wss = req.app.get('wss');
+  if (wss) {
+    console.log(`Sending '${message}' to ${wss.clients.size} clients...`);
+    wss.clients.forEach(function each(client) {
+      if (client.readyState === WebSocket.OPEN) {
+        console.log(`Sending push for updatedJob to client ${client._socket.remoteAddress}`);
+        client.send(message);
+      } else {
+        console.log(`${client} has socket not open`);
+      }
+    });
+  }
+}
 
 async function _sendVerificationEmail(recipient, link) {
   return new Promise((resolve, reject) => {
