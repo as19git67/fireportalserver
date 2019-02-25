@@ -465,6 +465,7 @@ router.options('/user/:name', CORS(corsOptions)); // enable pre-flight
 
 // perms needed: isAdmin
 router.get('/user/:name', CORS(corsOptions), authenticate, Right('admin'), function (req, res, next) {
+
   const name = req.params.name;
   new Users().getUserByName(name)
       .then(user => {
@@ -542,6 +543,93 @@ router.delete('/user/:name', CORS(corsOptions), authenticate, Right('admin'), fu
         console.log(`ERROR retrieving user with name ${name}: ${reason}`);
         res.status(500).end();
       });
+});
+
+router.options('/user', CORS(corsOptions)); // enable pre-flight
+
+// get own userdata -> must be logged in
+router.get('/user', CORS(corsOptions), authenticate, function (req, res, next) {
+  if (req.user) {
+    let accessRights = req.user.accessRights;
+    if (accessRights) {
+      console.log(`Access rights of user ${req.user.name}: ${accessRights}`);
+      if (_.contains(accessRights, "read")) {
+
+        console.log(`Reading user data of user ${req.user.name}`);
+        const name = req.user.name;
+        new Users().getUserByName(name)
+            .then(user => {
+              if (user) {
+                res.json(user);
+              } else {
+                res.status(404).end();
+              }
+            })
+            .catch(reason => {
+              console.log(`ERROR retrieving user with name ${name}: ${reason}`);
+              res.status(500).end();
+            });
+
+      } else {
+        console.log(`User ${req.user.name} does not have required right read`);
+        res.status(403).end();
+      }
+    } else {
+      console.log("Error: user object contains no accessRights");
+      res.status(500).end();
+    }
+  } else {
+    console.log("Error: Rights called, but user not set in req");
+    res.status(500).end();
+  }
+});
+
+// update own userdata -> must be logged in
+router.put('/user', CORS(corsOptions), authenticate, function (req, res, next) {
+  if (req.user) {
+    let accessRights = req.user.accessRights;
+    if (accessRights) {
+      console.log(`Access rights of user ${req.user.name}: ${accessRights}`);
+      if (_.contains(accessRights, "read")) {
+
+        console.log(`Reading user data of user ${req.user.name}`);
+        const name = req.user.name;
+        new Users().getUserByName(name)
+            .then(user => {
+              if (user) {
+                let newUserData = _.pick(req.body, 'email');
+
+                let updateUser = _.extend(user, newUserData);
+
+                u.saveUser(updateUser)
+                    .then(savedUser => {
+                      res.json(savedUser);
+                    })
+                    .catch(reason => {
+                      console.log(`ERROR retrieving user with name ${name}: ${reason}`);
+                      res.status(500).end();
+                    });
+              } else {
+                res.status(404).end();
+              }
+            })
+            .catch(reason => {
+              console.log(`ERROR retrieving user with name ${name}: ${reason}`);
+              res.status(500).end();
+            });
+
+      } else {
+        console.log(`User ${req.user.name} does not have required right read`);
+        res.status(403).end();
+      }
+    } else {
+      console.log("Error: user object contains no accessRights");
+      res.status(500).end();
+    }
+  } else {
+    console.log("Error: Rights called, but user not set in req");
+    res.status(500).end();
+  }
 });
 
 function _pushUpdate(req, message) {
