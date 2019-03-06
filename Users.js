@@ -231,12 +231,18 @@ _.extend(Users.prototype, {
       accessRights.push('admin');
       accessRights.push('read');
       accessRights.push('write');
+      if (user.encryptedKey) {
+        accessRights.push('decrypt');
+      }
     } else {
       if (user.canRead) {
         accessRights.push('read');
       }
       if (user.canWrite) {
         accessRights.push('write');
+      }
+      if (user.encryptedKey) {
+        accessRights.push('decrypt');
       }
     }
     return accessRights;
@@ -319,7 +325,9 @@ _.extend(Users.prototype, {
     const self = this;
     let data = await this._initFile();
     if (data.users[user.name]) {
-      _.extend(data.users[user.name], _.pick(user, 'name', 'email', 'state', 'canRead', 'canWrite', 'isAdmin', 'isAutologin', 'expiredAfter'));
+      _.extend(data.users[user.name],
+          _.pick(user, 'name', 'email', 'state', 'canRead', 'canWrite', 'isAdmin', 'isAutologin', 'expiredAfter', 'encryptedKey', 'encryptionSalt',
+              'encryptionIv'));
       return new Promise((resolve, reject) => {
         jf.writeFile(self.filename, data, {spaces: 2}, function (error) {
           if (error) {

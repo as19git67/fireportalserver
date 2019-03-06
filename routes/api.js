@@ -13,6 +13,7 @@ const Jobs = require('../Jobs');
 const Users = require('../Users');
 const Staff = require('../Staff');
 const WebSocket = require('ws');
+const crypto = require('crypto');
 
 let corsOptions = {
   origin: false
@@ -71,6 +72,70 @@ let Right = function (right) {
     }
   };
 };
+
+router.options('/keys', CORS(corsOptions)); // enable pre-flight
+
+/* add a new encryption key, which replaces any current encryption key */
+// perms needed: admin
+router.post('/keys', CORS(corsOptions), authenticate, Right('admin'), function (req, res, next) {
+
+  const password = req.body.password;
+  // todo: check password strength
+
+  // create key from password with salt
+  function _createHashPassword(password, salt) {
+    const d1 = new Date();
+    let passwordHash = crypto.pbkdf2Sync(Buffer.from(password), Buffer.from(salt), 2000000, 32, 'sha512');
+    const d2 = new Date();
+    console.log(d1.toString() + ', ' + d2.toString());
+    return passwordHash.toString('base64');
+  }
+
+  function _encrypt(dataAsBase64, keyAsBase64, ivAsBase64) {
+    const algorithm = 'aes-256-cbc';
+    const inputEncoding = 'base64';
+    const outputEncoding = 'base64';
+    let cipher = crypto.createCipheriv(algorithm, Buffer.from(keyAsBase64, "base64"), Buffer.from(ivAsBase64, "base64"));
+    let encrypted = cipher.update(dataAsBase64, inputEncoding, outputEncoding);
+    encrypted += cipher.final(outputEncoding);
+    return encrypted;
+  }
+
+  // create random salt
+  const salt = crypto.randomBytes(32).toString('base64');
+  // create random initialization vector
+  const iv = crypto.randomBytes(16).toString('base64');
+
+  const pwHash = _createHashPassword(password, salt);
+
+  // todo: store salt and iv together with password hash
+
+  // create new AES256 encryption key
+  const aesKeyAsBase64 = crypto.randomBytes(32).toString('base64');
+
+  // encrypt the encryption key with pwHash
+
+  const aesKeySecured = _encrypt(aesKeyAsBase64, pwHash, iv);
+
+  const name = req.user.name;
+  new Users().getUserByName(name)
+      .then(user => {
+        if (user) {
+          config.set('encryptedKey', aesKeySecured);
+          config.set('encryptionKeySalt', salt);
+          config.set('encryptionkeyIv', iv);
+
+          res.end();
+        } else {
+          res.status(404).end();
+        }
+      })
+      .catch(reason => {
+        console.log(`ERROR retrieving user with name ${name}: ${reason}`);
+        res.status(500).end();
+      });
+
+});
 
 router.options('/staff', CORS(corsOptions)); // enable pre-flight
 
