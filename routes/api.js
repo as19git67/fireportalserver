@@ -79,6 +79,7 @@ router.options('/keys', CORS(corsOptions)); // enable pre-flight
 // perms needed: admin
 router.post('/keys', CORS(corsOptions), authenticate, Right('admin'), function (req, res, next) {
 
+  const name = req.user.name;
   const password = req.body.password;
   // todo: check password strength
 
@@ -101,40 +102,66 @@ router.post('/keys', CORS(corsOptions), authenticate, Right('admin'), function (
     return encrypted;
   }
 
-  // create random salt
+  // // create random salt
   const salt = crypto.randomBytes(32).toString('base64');
-  // create random initialization vector
-  const iv = crypto.randomBytes(16).toString('base64');
+  // // create random initialization vector
+  // const iv = crypto.randomBytes(16).toString('base64');
 
   const pwHash = _createHashPassword(password, salt);
 
   // todo: store salt and iv together with password hash
 
-  // create new AES256 encryption key
-  const aesKeyAsBase64 = crypto.randomBytes(32).toString('base64');
+  // create new RSA keypair
+  crypto.generateKeyPair('rsa', {
+    modulusLength: 4096,
+    publicKeyEncoding: {
+      type: 'spki',
+      format: 'pem'
+    },
+    privateKeyEncoding: {
+      type: 'pkcs8',
+      format: 'pem',
+      cipher: 'aes-256-cbc',
+      passphrase: pwHash
+    }
+  }, (err, publicKey, privateKey) => {
+    if (err) {
+      res.status(500).send('Generating RSA keypair failed');
+      return;
+    }
 
-  // encrypt the encryption key with pwHash
+    // // create new AES256 encryption key
+    // const aesKeyAsBase64 = crypto.randomBytes(32).toString('base64');
+    // // encrypt the encryption key with pwHash
+    // const aesKeySecured = _encrypt(aesKeyAsBase64, pwHash, iv);
 
-  const aesKeySecured = _encrypt(aesKeyAsBase64, pwHash, iv);
+    const u = new Users();
+    try {
+      const keyName = `${name}-${moment().format()}`;
+      u.setPrivateKey(name, privateKey, salt, keyName)
+          .then(savedEncryptionKeyName => {
+            config.set('encryptionPublicKey', publicKey);
+            config.set('encryptionKeyName', keyName);
+            config.save(function (err) {
+              if (err) {
+                console.log(`Error saving RSA public key in config: ${err}`);
+                res.status(500).send('Saving the new RSA public key failed');
+              } else {
+                console.log(`New RSA public key created by user ${name}`);
+                res.json({encryptionKeyName: savedEncryptionKeyName});
+              }
+            });
+          })
+          .catch(reason => {
+            res.status(500).end();
+            console.log(`Exception while setting private key in users data: ${reason}`);
+          });
 
-  const name = req.user.name;
-  new Users().getUserByName(name)
-      .then(user => {
-        if (user) {
-          config.set('encryptedKey', aesKeySecured);
-          config.set('encryptionKeySalt', salt);
-          config.set('encryptionkeyIv', iv);
-
-          res.end();
-        } else {
-          res.status(404).end();
-        }
-      })
-      .catch(reason => {
-        console.log(`ERROR retrieving user with name ${name}: ${reason}`);
-        res.status(500).end();
-      });
-
+    } catch (ex) {
+      res.status(500).end();
+      console.log(`Exception while saving RSA keypair: ${ex}`);
+    }
+  });
 });
 
 router.options('/staff', CORS(corsOptions)); // enable pre-flight
@@ -566,6 +593,7 @@ router.put('/user/:name', CORS(corsOptions), authenticate, Right('admin'), funct
 
           u.saveUser(updateUser)
               .then(savedUser => {
+                // todo filter user data for attributes that can go over the wire
                 res.json(savedUser);
               })
               .catch(reason => {
@@ -668,6 +696,7 @@ router.put('/user', CORS(corsOptions), authenticate, function (req, res, next) {
 
                 u.saveUser(updateUser)
                     .then(savedUser => {
+                      // todo filter user data for attributes that can go over the wire
                       res.json(savedUser);
                     })
                     .catch(reason => {

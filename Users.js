@@ -83,7 +83,8 @@ _.extend(Users.prototype, {
         canRead: user.canRead,
         canWrite: user.canWrite,
         isAdmin: user.isAdmin,
-        isAutologin: user.isAutologin
+        isAutologin: user.isAutologin,
+        encryptionKeyName: user.encryptionKeyName
       };
     } else {
       console.log("User with email ", email, " does not exist.");
@@ -104,7 +105,8 @@ _.extend(Users.prototype, {
         canRead: user.canRead,
         canWrite: user.canWrite,
         isAdmin: user.isAdmin,
-        isAutologin: user.isAutologin
+        isAutologin: user.isAutologin,
+        encryptionKeyName: user.encryptionKeyName
       };
     }
   },
@@ -151,7 +153,7 @@ _.extend(Users.prototype, {
           } else {
             reject('Code verification failed');
           }
-        }, 5 * 1000);
+        }, 2 * 1000);
       });
     } else {
       throw new Error('Unknown user');
@@ -212,7 +214,7 @@ _.extend(Users.prototype, {
           if (now.isAfter(user.accessTokenExpiresAfter)) {
             throw {message: 'access token expired', status: 401};
           } else {
-            return _.pick(user, 'name', 'email', 'state', 'canRead', 'canWrite', 'isAdmin', 'expiredAfter');
+            return _.pick(user, 'name', 'email', 'state', 'canRead', 'canWrite', 'isAdmin', 'expiredAfter', 'encryptionKeyName');
           }
         } else {
           throw {message: 'invalid access token', status: 401};
@@ -231,7 +233,7 @@ _.extend(Users.prototype, {
       accessRights.push('admin');
       accessRights.push('read');
       accessRights.push('write');
-      if (user.encryptedKey) {
+      if (user.encryptionKeyName) {
         accessRights.push('decrypt');
       }
     } else {
@@ -241,7 +243,7 @@ _.extend(Users.prototype, {
       if (user.canWrite) {
         accessRights.push('write');
       }
-      if (user.encryptedKey) {
+      if (user.encryptionKeyName) {
         accessRights.push('decrypt');
       }
     }
@@ -269,7 +271,8 @@ _.extend(Users.prototype, {
           canWrite: user.canWrite,
           isAdmin: user.isAdmin,
           isAutologin: user.isAutologin,
-          expiredAfter: user.expiredAfter
+          expiredAfter: user.expiredAfter,
+          encryptionKeyName: user.encryptionKeyName
         };
       });
     } else {
@@ -312,6 +315,23 @@ _.extend(Users.prototype, {
     }
   },
 
+  setPrivateKey: async function (username, encryptedPrivateKey, salt, encryptionKeyName) {
+    // todo lock users.json file during read and write for consistency
+    let user = await this.getUserByName(username);
+    if (!user) {
+      throw new Error(`User ${username} does not exist`);
+    }
+    user.encryptedPrivateKey = encryptedPrivateKey;
+    user.encryptionPrivateKeySalt = salt;
+    user.encryptionKeyName = encryptionKeyName;
+    let savedUser = await this.saveUser(user);
+    return savedUser.encryptionKeyName;
+  },
+
+  encryptData: async function (data, username, password) {
+
+  },
+
   /* updates user information - without secret and otpCounter */
   saveUser: async function (user) {
     if (!user) {
@@ -326,8 +346,8 @@ _.extend(Users.prototype, {
     let data = await this._initFile();
     if (data.users[user.name]) {
       _.extend(data.users[user.name],
-          _.pick(user, 'name', 'email', 'state', 'canRead', 'canWrite', 'isAdmin', 'isAutologin', 'expiredAfter', 'encryptedKey', 'encryptionSalt',
-              'encryptionIv'));
+          _.pick(user, 'name', 'email', 'state', 'canRead', 'canWrite', 'isAdmin', 'isAutologin', 'expiredAfter', 'encryptedPrivateKey',
+              'encryptionPrivateKeySalt', 'encryptionKeyName'));
       return new Promise((resolve, reject) => {
         jf.writeFile(self.filename, data, {spaces: 2}, function (error) {
           if (error) {
@@ -342,7 +362,8 @@ _.extend(Users.prototype, {
               canWrite: savedUser.canWrite,
               isAdmin: savedUser.isAdmin,
               isAutologin: savedUser.isAutologin,
-              expiredAfter: savedUser.expiredAfter
+              expiredAfter: savedUser.expiredAfter,
+              encryptionKeyName: savedUser.encryptionKeyName
             });
           }
         });
@@ -366,6 +387,14 @@ _.extend(Users.prototype, {
       });
       if (!otherAdmin) {
         throw new Error("Can't delete last administrator");
+      }
+    }
+    if (user.encryptionKeyName) {
+      let otherUserCanDecrypt = _.find(data.users, function (u) {
+        return u.encryptionKeyName && u.name !== user.name;
+      });
+      if (!otherUserCanDecrypt) {
+        throw new Error("Can't delete last user that can decrypt");
       }
     }
     delete data.users[name];
