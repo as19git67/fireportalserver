@@ -24,13 +24,14 @@ module.exports.init = function (passport, callback) {
       }
         } else {
           if (accessToken.indexOf('.') > 0) {
+            let parts = accessToken.split('.');
+            let token = parts[0];
+            let username = Buffer.from(parts[1], 'base64').toString('latin1');
             try {
-              let parts = accessToken.split('.');
-              let token = parts[0];
-              let username = Buffer.from(parts[1], 'base64').toString('latin1');
               let user = await u.verifyTokenAndGetUser(username, token);
               return done(null, {name: username, accessRights: u.getAccessRights(user)}, info);
             } catch (ex) {
+              console.log(`ERROR logging in user ${username}: ${ex.message}`);
               return done({message: ex.message, status: ex.status ? ex.status : 500});
             }
           }

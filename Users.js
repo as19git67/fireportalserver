@@ -209,19 +209,24 @@ _.extend(Users.prototype, {
     }
     let user = data.users[name];
     if (user) {
-      if (newToo || user.state === 'provisioned') {
-        if (user.accessToken === token) {
-          let now = moment();
-          if (now.isAfter(user.accessTokenExpiresAfter)) {
-            throw {message: 'access token expired', status: 401};
+      let now = moment();
+      if (now.isAfter(user.expiredAfter)) {
+        throw {message: 'user expired', status: 401};
+      } else {
+        if (newToo || user.state === 'provisioned') {
+          if (user.accessToken === token) {
+            let now = moment();
+            if (now.isAfter(user.accessTokenExpiresAfter)) {
+              throw {message: 'access token expired', status: 401};
+            } else {
+              return _.pick(user, 'name', 'email', 'state', 'canRead', 'canWrite', 'isAdmin', 'expiredAfter', 'encryptionKeyName');
+            }
           } else {
-            return _.pick(user, 'name', 'email', 'state', 'canRead', 'canWrite', 'isAdmin', 'expiredAfter', 'encryptionKeyName');
+            throw {message: 'invalid access token', status: 401};
           }
         } else {
-          throw {message: 'invalid access token', status: 401};
+          throw {message: 'user is not provisioned', status: 401};
         }
-      } else {
-        throw {message: 'user is not provisioned', status: 401};
       }
     } else {
       throw new {message: "user does not exist", status: 401};
@@ -385,8 +390,12 @@ _.extend(Users.prototype, {
     if (user) {
       let salt = user.encryptionPrivateKeySalt;
       let privateKey = user.encryptedPrivateKey;
-      const pwHash = this._createHashPassword(password, salt);
-      return {encryptedPrivateKey: privateKey, passphrase: pwHash};
+      if (salt && privateKey) {
+        const pwHash = this._createHashPassword(password, salt);
+        return {encryptedPrivateKey: privateKey, passphrase: pwHash};
+      } else {
+        throw new Error(`User ${username} has no decryption key`);
+      }
     } else {
       throw new Error(`Unknown user ${username}`);
     }
