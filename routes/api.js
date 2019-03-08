@@ -13,7 +13,6 @@ const Jobs = require('../Jobs');
 const Users = require('../Users');
 const Staff = require('../Staff');
 const WebSocket = require('ws');
-const crypto = require('crypto');
 
 let corsOptions = {
   origin: false
@@ -83,85 +82,27 @@ router.post('/keys', CORS(corsOptions), authenticate, Right('admin'), function (
   const password = req.body.password;
   // todo: check password strength
 
-  // create key from password with salt
-  function _createHashPassword(password, salt) {
-    const d1 = new Date();
-    let passwordHash = crypto.pbkdf2Sync(Buffer.from(password), Buffer.from(salt), 2000000, 32, 'sha512');
-    const d2 = new Date();
-    console.log(d1.toString() + ', ' + d2.toString());
-    return passwordHash.toString('base64');
-  }
+  const u = new Users();
+  u.createNewKeyPair(name, password)
+      .then(result => {
 
-  function _encrypt(dataAsBase64, keyAsBase64, ivAsBase64) {
-    const algorithm = 'aes-256-cbc';
-    const inputEncoding = 'base64';
-    const outputEncoding = 'base64';
-    let cipher = crypto.createCipheriv(algorithm, Buffer.from(keyAsBase64, "base64"), Buffer.from(ivAsBase64, "base64"));
-    let encrypted = cipher.update(dataAsBase64, inputEncoding, outputEncoding);
-    encrypted += cipher.final(outputEncoding);
-    return encrypted;
-  }
-
-  // // create random salt
-  const salt = crypto.randomBytes(32).toString('base64');
-  // // create random initialization vector
-  // const iv = crypto.randomBytes(16).toString('base64');
-
-  const pwHash = _createHashPassword(password, salt);
-
-  // todo: store salt and iv together with password hash
-
-  // create new RSA keypair
-  crypto.generateKeyPair('rsa', {
-    modulusLength: 4096,
-    publicKeyEncoding: {
-      type: 'spki',
-      format: 'pem'
-    },
-    privateKeyEncoding: {
-      type: 'pkcs8',
-      format: 'pem',
-      cipher: 'aes-256-cbc',
-      passphrase: pwHash
-    }
-  }, (err, publicKey, privateKey) => {
-    if (err) {
-      res.status(500).send('Generating RSA keypair failed');
-      return;
-    }
-
-    // // create new AES256 encryption key
-    // const aesKeyAsBase64 = crypto.randomBytes(32).toString('base64');
-    // // encrypt the encryption key with pwHash
-    // const aesKeySecured = _encrypt(aesKeyAsBase64, pwHash, iv);
-
-    const u = new Users();
-    try {
-      const keyName = `${name}-${moment().format()}`;
-      u.setPrivateKey(name, privateKey, salt, keyName)
-          .then(savedEncryptionKeyName => {
-            config.set('encryptionPublicKey', publicKey);
-            config.set('encryptionKeyName', keyName);
-            config.save(function (err) {
-              if (err) {
-                console.log(`Error saving RSA public key in config: ${err}`);
-                res.status(500).send('Saving the new RSA public key failed');
-              } else {
-                console.log(`New RSA public key created by user ${name}`);
-                res.json({encryptionKeyName: savedEncryptionKeyName});
-              }
-            });
-          })
-          .catch(reason => {
-            res.status(500).end();
-            console.log(`Exception while setting private key in users data: ${reason}`);
-          });
-
-    } catch (ex) {
-      res.status(500).end();
-      console.log(`Exception while saving RSA keypair: ${ex}`);
-    }
-  });
+        // save public key in settings.json - everyone can see it
+        config.set('encryptionPublicKey', result.encryptionPublicKey);
+        config.set('encryptionKeyName', result.encryptionKeyName);
+        config.save(function (err) {
+          if (err) {
+            console.log(`Error saving RSA public key in config: ${err}`);
+            res.status(500).send('Saving the new RSA public key failed');
+          } else {
+            console.log(`New RSA public key created by user ${name}`);
+            res.json({encryptionKeyName: result.encryptionKeyName});
+          }
+        });
+      })
+      .catch(reason => {
+        res.status(500).end();
+        console.log(`Exception while creating RSA keypair: ${reason}`);
+      });
 });
 
 router.options('/staff', CORS(corsOptions)); // enable pre-flight
@@ -233,7 +174,10 @@ async function updateJob(jobId, req) {
     } else {
       if (!data.encrypted && originalJob.encrypted) {
         // decrypt job data
-        let decryptedJob = await j.decryptJob(originalJob);
+        const username = req.user.name;
+        const u = new Users();
+        const keyObj = await u.getPrivateKey(username, data.passphrase);
+        let decryptedJob = await j.decryptJob(originalJob, keyObj);
         return decryptedJob;
       } else {
         console.log(`Warning: updateJob called with data.encrypted=${data.encrypted}, but job has already this state`);
@@ -282,8 +226,10 @@ router.put('/jobs/:id', CORS(corsOptions), authenticate, Right('write'), functio
             delete updatedJob.images; // send back job without image, because it does not get updated
             res.json(updatedJob);
 
-            // notify all clients
-            _pushUpdate(req, `updatedJob:${jobId}`);
+            setTimeout(function () {
+              // notify all clients
+              _pushUpdate(req, `updatedJob:${jobId}`);
+            }, 1000);
           })
           .catch(reason => {
             console.log(reason);

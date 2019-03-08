@@ -4,6 +4,7 @@ const _ = require('underscore');
 const moment = require('moment');
 const speakeasy = require('speakeasy');
 const hat = require('hat');
+const crypto = require('crypto');
 
 let Users = module.exports = function (options) {
   options || (options = {});
@@ -315,21 +316,80 @@ _.extend(Users.prototype, {
     }
   },
 
-  setPrivateKey: async function (username, encryptedPrivateKey, salt, encryptionKeyName) {
-    // todo lock users.json file during read and write for consistency
-    let user = await this.getUserByName(username);
-    if (!user) {
-      throw new Error(`User ${username} does not exist`);
-    }
-    user.encryptedPrivateKey = encryptedPrivateKey;
-    user.encryptionPrivateKeySalt = salt;
-    user.encryptionKeyName = encryptionKeyName;
-    let savedUser = await this.saveUser(user);
-    return savedUser.encryptionKeyName;
+  // create key from password with salt
+  _createHashPassword: function (password, salt) {
+    const d1 = new Date();
+    let passwordHash = crypto.pbkdf2Sync(Buffer.from(password), Buffer.from(salt), 2000000, 32, 'sha512');
+    const d2 = new Date();
+    console.log(d1.toString() + ', ' + d2.toString());
+    return passwordHash.toString('base64');
   },
 
-  encryptData: async function (data, username, password) {
+  createNewKeyPair: async function (username, password) {
+    let user = await this.getUserByName(username);
+    if (user) {
+      return new Promise((resolve, reject) => {
 
+        // // create random salt
+        const salt = crypto.randomBytes(32).toString('base64');
+        // // create random initialization vector
+        // const iv = crypto.randomBytes(16).toString('base64');
+
+        const pwHash = this._createHashPassword(password, salt);
+
+        // create new RSA keypair
+        crypto.generateKeyPair('rsa', {
+          modulusLength: 4096,
+          publicKeyEncoding: {
+            type: 'spki',
+            format: 'pem'
+          },
+          privateKeyEncoding: {
+            type: 'pkcs8',
+            format: 'pem',
+            cipher: 'aes-256-cbc',
+            passphrase: pwHash
+          }
+        }, async (err, publicKey, privateKey) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+
+          // // create new AES256 encryption key
+          // const aesKeyAsBase64 = crypto.randomBytes(32).toString('base64');
+          // // encrypt the encryption key with pwHash
+          // const aesKeySecured = _encrypt(aesKeyAsBase64, pwHash, iv);
+
+          const keyName = `${name}-${moment().format()}`;
+
+          // todo lock users.json file during read and write for consistency
+          user.encryptedPrivateKey = privateKey;
+          user.encryptionPrivateKeySalt = salt;
+          user.encryptionKeyName = keyName;
+          let savedUser = await this.saveUser(user);
+          resolve({encryptionKeyName: savedUser.encryptionKeyName, encryptionPublicKey: publicKey});
+        });
+      });
+    } else {
+      throw new Error(`User ${username} does not exist`);
+    }
+  },
+
+  getPrivateKey: async function (username, password) {
+    if (!password) {
+      throw new Error("Can't get private key without password");
+    }
+    let data = await this._initFile();
+    const user = data.users[username];
+    if (user) {
+      let salt = user.encryptionPrivateKeySalt;
+      let privateKey = user.encryptedPrivateKey;
+      const pwHash = this._createHashPassword(password, salt);
+      return {encryptedPrivateKey: privateKey, passphrase: pwHash};
+    } else {
+      throw new Error(`Unknown user ${username}`);
+    }
   },
 
   /* updates user information - without secret and otpCounter */

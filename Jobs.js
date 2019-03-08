@@ -195,14 +195,9 @@ _.extend(Jobs.prototype, {
   },
 
   _encrypt: async function (job) {
-    let encryptKeyFilename = config.get('encryptKeyFilename');
-    let encryptionKeyPath = config.get('encryptKeyPath');
-    if (!encryptionKeyPath) {
-      encryptionKeyPath = __dirname;
-    }
+    const encryptionPublicKey = config.get('encryptionPublicKey');
+    const encryptionKeyName = config.get('encryptionKeyName');
     return new Promise((resolve, reject) => {
-      let encryptionKey = fs.readFileSync(path.resolve(encryptionKeyPath, encryptKeyFilename));
-
       crypto.randomBytes(32, (err, aesSecret) => {
         if (err) {
           reject(err);
@@ -210,10 +205,11 @@ _.extend(Jobs.prototype, {
         }
         // console.log(`${aesSecret.length} bytes of random data: ${aesSecret.toString('hex')}`);
 
-        let encryptedRandom = crypto.publicEncrypt(encryptionKey, aesSecret);
+        console.log(`Encrypting AES random key with public key ${encryptionKeyName}`);
+        let encryptedRandom = crypto.publicEncrypt(encryptionPublicKey, aesSecret);
         job.encryptedRandomBase64 = encryptedRandom.toString("base64");
 
-        const keys = ['longitude', 'latitude', 'street', 'streetnumber', 'city', 'object', 'plan', 'attendees', 'images'];
+        const keys = ['longitude', 'latitude', 'street', 'streetnumber', 'city', 'object', 'plan', 'attendees', 'images', 'report'];
         const o = _.pick(job, keys);
         const oStr = JSON.stringify(o);
 
@@ -233,18 +229,11 @@ _.extend(Jobs.prototype, {
     });
   },
 
-  _decrypt: async function (job) {
-    let decryptKeyFilename = config.get('decryptKeyFilename');
-    let encryptionKeyPath = config.get('encryptKeyPath');
-    if (!encryptionKeyPath) {
-      encryptionKeyPath = __dirname;
-    }
+  _decrypt: async function (job, keyObj) {
     return new Promise((resolve, reject) => {
-      // todo: don't read this from file -> use it from application memory
-      let decryptionKey = fs.readFileSync(path.resolve(encryptionKeyPath, decryptKeyFilename));
 
       const encryptedAesSecret = Buffer.from(job.encryptedRandomBase64, 'base64');
-      let aesSecret = crypto.privateDecrypt(decryptionKey, encryptedAesSecret);
+      let aesSecret = crypto.privateDecrypt({key: keyObj.encryptedPrivateKey, passphrase: keyObj.passphrase}, encryptedAesSecret);
 
       // generate initialization vector
       let iv = new Buffer.alloc(16); // fill with zeros
@@ -253,7 +242,6 @@ _.extend(Jobs.prototype, {
       let decipher = crypto.createDecipheriv('aes-256-cbc', aesSecret, iv);
       const encryptedText = new Buffer(job.encryptedData, 'hex');
       const decrypted = decipher.update(encryptedText, 'utf-8') + decipher.final('utf-8');
-      console.log(decrypted.toString());
       try {
         let decryptedJobData = JSON.parse(decrypted.toString());
         job = _.omit(job, ['encryptedData', 'encryptedRandomBase64']);
@@ -307,11 +295,11 @@ _.extend(Jobs.prototype, {
     });
   },
 
-  decryptJob: function (id) {
+  decryptJob: function (id, keyObj) {
     return new Promise(async (resolve, reject) => {
       try {
         let {job, data} = await this._prepareJobByIdOrObj(id);
-        const decryptedJob = await this._decrypt(job);
+        const decryptedJob = await this._decrypt(job, keyObj);
         data.jobs[job.id] = decryptedJob;
         jf.writeFile(this.filename, data, {spaces: 2})
             .then(() => {
