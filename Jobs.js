@@ -224,6 +224,14 @@ _.extend(Jobs.prototype, {
     const encryptionPublicKey = config.get('encryptionPublicKey');
     const encryptionKeyName = config.get('encryptionKeyName');
     return new Promise((resolve, reject) => {
+      if (!encryptionPublicKey) {
+        reject(new Error("encryptionPublicKey is not configured"));
+        return;
+      }
+      if (!encryptionKeyName) {
+        reject(new Error("encryptionKeyName is not configured"));
+        return;
+      }
       crypto.randomBytes(32, (err, aesSecret) => {
         if (err) {
           reject(err);
@@ -263,6 +271,14 @@ _.extend(Jobs.prototype, {
 
   _decrypt: async function (job, keyObj) {
     return new Promise((resolve, reject) => {
+      if (!keyObj || !keyObj.encryptedPrivateKey) {
+        reject(new Error("Can't decrypt without private key"));
+        return;
+      }
+      if (!keyObj || !keyObj.passphrase) {
+        reject(new Error("Can't decrypt without private key passphrase"));
+        return;
+      }
       let iv;
       const encryptedAesSecret = Buffer.from(job.encryptedRandomBase64, 'base64');
       if (job.encryptionRandomIvBase64) {
