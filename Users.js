@@ -5,6 +5,7 @@ const moment = require('moment');
 const speakeasy = require('speakeasy');
 const hat = require('hat');
 const crypto = require('crypto');
+const config = require('./config');
 
 let Users = module.exports = function (options) {
   options || (options = {});
@@ -234,6 +235,7 @@ _.extend(Users.prototype, {
   },
 
   getAccessRights: function (user) {
+    const publicKeyName = config.get('encryptionKeyName');
     let accessRights = [];
     if (user.isAdmin) {
       accessRights.push('admin');
@@ -242,12 +244,20 @@ _.extend(Users.prototype, {
       if (user.encryptionKeyName) {
         accessRights.push('decrypt');
       }
+      if (publicKeyName) {
+        accessRights.push('encrypt');
+      }
     } else {
       if (user.canRead) {
         accessRights.push('read');
       }
       if (user.canWrite) {
         accessRights.push('write');
+
+        // encrypt must have right to write and public key must be configured
+        if (publicKeyName) {
+          accessRights.push('encrypt');
+        }
       }
       if (user.encryptionKeyName) {
         accessRights.push('decrypt');
@@ -366,7 +376,7 @@ _.extend(Users.prototype, {
           // // encrypt the encryption key with pwHash
           // const aesKeySecured = _encrypt(aesKeyAsBase64, pwHash, iv);
 
-          const keyName = `${name}-${moment().format()}`;
+          const keyName = `${username}-${moment().format()}`;
 
           // todo lock users.json file during read and write for consistency
           user.encryptedPrivateKey = privateKey;
