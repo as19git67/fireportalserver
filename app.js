@@ -4,13 +4,11 @@ const helmet = require('helmet');
 const path = require('path');
 const cookieParser = require('cookie-parser');
 const logger = require('morgan');
-const _ = require('underscore');
-const config = require('./config');
 const moment = require('moment');
 
-const apiRouter = require('./routes/api');
+let app = express();
+const apiRouter = require('./routes/api')(app);
 
-var app = express();
 
 app.set('appName', 'Firealarm Portal Server');
 app.use(helmet());

@@ -145,6 +145,27 @@ _.extend(Jobs.prototype, {
     });
   },
 
+  backupJobs: function () {
+    const filename = path.join(__dirname, `jobs.backup.${moment().format('YYYY-MM-DD__HH.mm.ss')}.json`);
+    console.log(`Jobs backup started. Backup file is ${filename}`);
+
+    this._initFile()
+        .then(data => {
+          const encryptedJobs = _.where(data.jobs, {encrypted: true});
+
+          jf.writeFile(filename, {jobs: encryptedJobs, sequence: data.sequence}, {spaces: 2})
+              .then(() => {
+                console.log(`Backup of encrypted jobs written to ${filename}.`)
+              })
+              .catch(reason => {
+                console.log(`EXCEPTION while writing the jobs backup file ${filename}: ${reason}`)
+              });
+        })
+        .catch(reason => {
+          console.log(`EXCEPTION while backing up jobs: ${reason}`)
+        });
+  },
+
   /* updates job information */
   saveJob: async function (job) {
     if (job.id === undefined) {
