@@ -56,9 +56,9 @@ _.extend(Jobs.prototype, {
     let data = await this._initFile();
     const job = data.jobs[id];
     if (job) {
-      let jobData = _.pick(job, 'id', 'encrypted', 'encryptedRandomBase64', 'encryptedData', 'start', 'end', 'title', 'number', 'keyword', 'catchword',
-          'longitude', 'latitude', 'street', 'streetnumber',
-          'city', 'object', 'resource', 'plan', 'images', 'attendees', 'report');
+      let jobData = _.pick(job, 'id', 'encrypted', 'encryptedRandomBase64', 'encryptionRandomIvBase64', 'encryptedData', 'start', 'end', 'title',
+          'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city', 'object', 'resource', 'plan', 'images',
+          'attendees', 'report');
       jobData.id = id;
       return jobData;
     }
@@ -69,10 +69,9 @@ _.extend(Jobs.prototype, {
     let data = await this._initFile();
     if (data) {
       let jobs = _.map(data.jobs, function (job, key) {
-        let oneJob = _.pick(job, 'encrypted', 'encryptedRandomBase64', 'encryptedData', 'start', 'end', 'title', 'number', 'keyword', 'catchword', 'longitude',
-            'latitude', 'street', 'streetnumber',
-            'city',
-            'object', 'resource', 'plan', 'images', 'attendees', 'report');
+        let oneJob = _.pick(job, 'encrypted', 'encryptedRandomBase64', 'encryptionRandomIvBase64', 'encryptedData', 'start', 'end', 'title',
+            'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city', 'object', 'resource', 'plan', 'images',
+            'attendees', 'report');
         oneJob.id = key;
         return oneJob;
       });
@@ -82,7 +81,8 @@ _.extend(Jobs.prototype, {
     }
   },
 
-  _addJob: async function (encrypted, start, end, title, number, keyword, catchword, longitude, latitude, street, streetnumber, city, object, resource, plan,
+  _addJob: async function (encrypted, start, end, title, number, keyword, catchword, longitude, latitude, street, streetnumber, city, object,
+      resource, plan,
       images,
       attendees) {
     let data = await this._initFile();
@@ -183,7 +183,8 @@ _.extend(Jobs.prototype, {
         throw new Error('job is encrypted');
       } else {
         _.extend(data.jobs[job.id],
-            _.pick(job, 'encrypted', 'start', 'end', 'title', 'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city',
+            _.pick(job, 'encrypted', 'start', 'end', 'title', 'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street',
+                'streetnumber', 'city',
                 'object', 'resource', 'plan', 'images', 'attendees', 'report'));
         return new Promise((resolve, reject) => {
           jf.writeFile(this.filename, data, {spaces: 2})
@@ -228,40 +229,50 @@ _.extend(Jobs.prototype, {
           reject(err);
           return;
         }
-        // console.log(`${aesSecret.length} bytes of random data: ${aesSecret.toString('hex')}`);
 
-        console.log(`Encrypting AES random key with public key ${encryptionKeyName}`);
-        let encryptedRandom = crypto.publicEncrypt(encryptionPublicKey, aesSecret);
-        job.encryptedRandomBase64 = encryptedRandom.toString("base64");
+        // create initialization vector
+        crypto.randomBytes(16, (err, iv) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          // console.log(`${aesSecret.length} bytes of random data: ${aesSecret.toString('hex')}`);
 
-        const keys = ['longitude', 'latitude', 'street', 'streetnumber', 'city', 'object', 'plan', 'attendees', 'images', 'report'];
-        const o = _.pick(job, keys);
-        const oStr = JSON.stringify(o);
+          console.log(`Encrypting AES random key with public key ${encryptionKeyName}`);
+          let encryptedRandom = crypto.publicEncrypt(encryptionPublicKey, aesSecret);
+          job.encryptedRandomBase64 = encryptedRandom.toString("base64");
+          job.encryptionRandomIvBase64 = iv.toString("base64");
 
-        // generate initialization vector
-        let iv = new Buffer.alloc(16); // fill with zeros
+          const keys = ['longitude', 'latitude', 'street', 'streetnumber', 'city', 'object', 'plan', 'attendees', 'images', 'report'];
+          const o = _.pick(job, keys);
+          const oStr = JSON.stringify(o);
 
-        // encrypt data
-        let cipher = crypto.createCipheriv('aes-256-cbc', aesSecret, iv);
-        const buffer = Buffer.from(oStr);
-        let encryptedData = cipher.update(buffer, 'utf8', 'hex') + cipher.final('hex');
+          // encrypt data
+          let cipher = crypto.createCipheriv('aes-256-cbc', aesSecret, iv);
+          const buffer = Buffer.from(oStr);
+          let encryptedData = cipher.update(buffer, 'utf8', 'hex') + cipher.final('hex');
 
-        let encryptedJob = _.omit(job, keys);
-        encryptedJob.encrypted = true;
-        encryptedJob.encryptedData = encryptedData;
-        resolve(encryptedJob);
+          let encryptedJob = _.omit(job, keys);
+          encryptedJob.encrypted = true;
+          encryptedJob.encryptedData = encryptedData;
+          resolve(encryptedJob);
+        });
       });
     });
   },
 
   _decrypt: async function (job, keyObj) {
     return new Promise((resolve, reject) => {
-
+      let iv;
       const encryptedAesSecret = Buffer.from(job.encryptedRandomBase64, 'base64');
-      let aesSecret = crypto.privateDecrypt({key: keyObj.encryptedPrivateKey, passphrase: keyObj.passphrase}, encryptedAesSecret);
+      if (job.encryptionRandomIvBase64) {
+        iv = Buffer.from(job.encryptionRandomIvBase64, 'base64');
+      } else {
+        // todo remove the else processing
+        iv = new Buffer.alloc(16); // fill with zeros
+      }
 
-      // generate initialization vector
-      let iv = new Buffer.alloc(16); // fill with zeros
+      let aesSecret = crypto.privateDecrypt({key: keyObj.encryptedPrivateKey, passphrase: keyObj.passphrase}, encryptedAesSecret);
 
       // decrypt data
       let decipher = crypto.createDecipheriv('aes-256-cbc', aesSecret, iv);
@@ -269,7 +280,7 @@ _.extend(Jobs.prototype, {
       const decrypted = decipher.update(encryptedText, 'utf-8') + decipher.final('utf-8');
       try {
         let decryptedJobData = JSON.parse(decrypted.toString());
-        job = _.omit(job, ['encryptedData', 'encryptedRandomBase64']);
+        job = _.omit(job, ['encryptedData', 'encryptedRandomBase64', 'encryptionRandomIvBase64']);
         job = _.extend(job, decryptedJobData, {encrypted: false});
         resolve(job);
       } catch (ex) {
