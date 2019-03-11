@@ -283,9 +283,6 @@ _.extend(Jobs.prototype, {
       const encryptedAesSecret = Buffer.from(job.encryptedRandomBase64, 'base64');
       if (job.encryptionRandomIvBase64) {
         iv = Buffer.from(job.encryptionRandomIvBase64, 'base64');
-      } else {
-        // todo remove the else processing
-        iv = new Buffer.alloc(16); // fill with zeros
       }
 
       let aesSecret = crypto.privateDecrypt({key: keyObj.encryptedPrivateKey, passphrase: keyObj.passphrase}, encryptedAesSecret);
