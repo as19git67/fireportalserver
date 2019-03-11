@@ -151,7 +151,11 @@ _.extend(Jobs.prototype, {
 
     this._initFile()
         .then(data => {
-          const encryptedJobs = _.where(data.jobs, {encrypted: true});
+          const encryptedJobs = {};
+          const encryptedJobsAsArray = _.where(data.jobs, {encrypted: true});
+          _.each(encryptedJobsAsArray, function (job) {
+            encryptedJobs[job.id] = job;
+          });
 
           jf.writeFile(filename, {jobs: encryptedJobs, sequence: data.sequence}, {spaces: 2})
               .then(() => {
