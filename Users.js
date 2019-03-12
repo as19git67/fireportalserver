@@ -402,7 +402,7 @@ _.extend(Users.prototype, {
       let privateKey = user.encryptedPrivateKey;
       if (salt && privateKey) {
         const pwHash = this._createHashPassword(password, salt);
-        return {encryptedPrivateKey: privateKey, passphrase: pwHash};
+        return {encryptedPrivateKey: privateKey, passphrase: pwHash, encryptionKeyName: user.encryptionKeyName};
       } else {
         throw new Error(`User ${username} has no decryption key`);
       }

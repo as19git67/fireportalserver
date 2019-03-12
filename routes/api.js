@@ -85,6 +85,30 @@ module.exports = function (app) {
 
   router.options('/keys', CORS(corsOptions)); // enable pre-flight
 
+  // check the passphrase for the own decryption key
+  // perms needed: read
+  router.get('/keys/:id', CORS(corsOptions), authenticate, Right('read'), function (req, res, next) {
+
+    const username = req.user.name;
+    const passphrase = req.body.password;
+    const keyName = req.params.id;
+    const u = new Users();
+
+    u.getPrivateKey(username, passphrase)
+        .then(result => {
+          const encryptionKeyName = result.encryptionKeyName;
+          if (keyName === encryptionKeyName) {
+            res.json({encryptionKeyName: result.encryptionKeyName});
+          } else {
+            res.status(401).end();
+          }
+        })
+        .catch(reason => {
+          res.status(500).end();
+          console.log(`Exception while checking password: ${reason}`);
+        })
+  });
+
   /* add a new encryption key, which replaces any current encryption key */
   // perms needed: admin
   router.post('/keys', CORS(corsOptions), authenticate, Right('admin'), function (req, res, next) {
@@ -204,8 +228,10 @@ module.exports = function (app) {
 
       const levelOneKeysOfPossibleChanges = ['start', 'end', 'title', 'number', 'encrypted'];
       const attendeesKeysOfPossibleChanges = ['id', 'lastname', 'firstname'];
-      const reportKeysOfPossibleChanges = ['incident', 'location', 'director', 'text', 'material', 'rescued', 'recovered', 'others', 'duration', 'staffcount',
-        'writer'];
+      const reportKeysOfPossibleChanges = [
+        'incident', 'location', 'director', 'text', 'material', 'rescued', 'recovered', 'others', 'duration', 'staffcount',
+        'writer'
+      ];
       newJobData = _.pick(data, levelOneKeysOfPossibleChanges);
       if (data.attendees) {
         newJobData.attendees = _.map(data.attendees, function (attendee) {
@@ -298,12 +324,12 @@ module.exports = function (app) {
               let fullFilepath = path.join(debugSavePrintfiles, file.name);
               if (!path.extname(fullFilepath)) {
                 switch (file.type) {
-                case 'image/png':
-                  fullFilepath = fullFilepath + '.png';
-                  break;
-                case 'text/plain':
-                  fullFilepath = fullFilepath + '.txt';
-                  break;
+                  case 'image/png':
+                    fullFilepath = fullFilepath + '.png';
+                    break;
+                  case 'text/plain':
+                    fullFilepath = fullFilepath + '.txt';
+                    break;
                 }
               }
               fs.writeFile(fullFilepath, data, function (err) {
