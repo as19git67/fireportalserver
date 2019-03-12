@@ -269,16 +269,16 @@ _.extend(Users.prototype, {
   getAll: async function () {
     let data = await this._initFile();
     if (data) {
-      let notExpiredUsers = _.filter(data.users, function (user) {
-        if (!user.expiredAfter) {
-          user.expiredAfter = "9999-12-31";
-          return true;
-        } else {
-          let ea = moment(user.expiredAfter);
-          return moment().isBefore(ea)
-        }
-      });
-      return _.map(notExpiredUsers, function (user) {
+      // let notExpiredUsers = _.filter(data.users, function (user) {
+      //   if (!user.expiredAfter) {
+      //     user.expiredAfter = "9999-12-31";
+      //     return true;
+      //   } else {
+      //     let ea = moment(user.expiredAfter);
+      //     return moment().isBefore(ea)
+      //   }
+      // });
+      return _.map(data.users, function (user) {
         return {
           name: user.name,
           email: user.email,
