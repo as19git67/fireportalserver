@@ -6,6 +6,7 @@ const speakeasy = require('speakeasy');
 const hat = require('hat');
 const crypto = require('crypto');
 const config = require('./config');
+const forge = require('node-forge');
 
 let Users = module.exports = function (options) {
   options || (options = {});
@@ -347,10 +348,8 @@ _.extend(Users.prototype, {
     if (user) {
       return new Promise((resolve, reject) => {
 
-        // // create random salt
+        // create random salt
         const salt = crypto.randomBytes(32).toString('base64');
-        // // create random initialization vector
-        // const iv = crypto.randomBytes(16).toString('base64');
 
         const pwHash = this._createHashPassword(password, salt);
 
@@ -412,6 +411,74 @@ _.extend(Users.prototype, {
     } else {
       throw new Error(`Unknown user ${username}`);
     }
+  },
+
+  migratePrivateKey: async function (sourceUsername, sourcePrivateKeyPassword, sourceKeyname, targetUsername, targetPrivateKeyPassword) {
+    if (!sourcePrivateKeyPassword) {
+      throw new Error("Can't get source private key without password");
+    }
+    if (!targetPrivateKeyPassword) {
+      throw new Error("Can't save target private key without password");
+    }
+    let data = await this._initFile();
+    const sourceUser = data.users[sourceUsername];
+    if (sourceUser) {
+      const targetUser = data.users[targetUsername];
+      if (targetUser) {
+        if (targetUser.encryptionKeyName) {
+          throw new Error(`User ${username} already has a decryption key (${targetUser.encryptionKeyName}) set`)
+        }
+        if (sourceUser.encryptionKeyName === sourceKeyname) {
+          let salt = sourceUser.encryptionPrivateKeySalt;
+          if (salt && sourceUser.encryptedPrivateKey) {
+            const sourcePasswordHash = this._createHashPassword(sourcePrivateKeyPassword, salt);
+
+            const pki = forge.pki;
+            let sourceKeyBuffer = Buffer.from(sourceUser.encryptedPrivateKey);
+            const privateKey = pki.decryptRsaPrivateKey(sourceKeyBuffer, sourcePasswordHash);
+            if (privateKey) {
+              // create random salt for target user
+              salt = crypto.randomBytes(32).toString('base64');
+              const targetPasswordHash = this._createHashPassword(targetPrivateKeyPassword, salt);
+              const targetPrivateKeyAsPem = pki.encryptRsaPrivateKey(privateKey, targetPasswordHash);
+              targetUser.encryptedPrivateKey = targetPrivateKeyAsPem;
+              targetUser.encryptionPrivateKeySalt = salt;
+              targetUser.encryptionKeyName = sourceUser.encryptionKeyName;
+              let savedUser = await this.saveUser(targetUser);
+              return {encryptionKeyName: savedUser.encryptionKeyName};
+            } else {
+              throw new Error(`Password for key ${sourceUser.encryptionKeyName} is wrong.`)
+            }
+          } else {
+            throw new Error(`User ${sourceUsername} has no decryption key`);
+          }
+        } else {
+          throw new Error(`User ${sourceUsername} does not have private key ${sourceUser.encryptionKeyName}`);
+        }
+      } else {
+        throw new Error(`Unknown target user ${targetUsername}`);
+      }
+    } else {
+      throw new Error(`Unknown source user ${sourceUsername}`);
+    }
+  },
+
+  deletePrivateKey: async function (username, encryptionKeyName) {
+    let data = await this._initFile();
+    const user = data.users[username];
+    if (!user) {
+      throw new Error(`User ${username} does not exist`);
+    }
+    if (user.encryptionKeyName !== encryptionKeyName) {
+      throw new Error(`User ${username} does not have decryptionKeyName ${encryptionKeyName}`);
+    }
+
+    user.encryptionKeyName = '';
+    user.encryptedPrivateKey = '';
+    user.encryptionPrivateKeySalt = '';
+
+    await this.saveUser(user);
+    return await this.getUserByName(username);
   },
 
   /* updates user information - without secret and otpCounter */

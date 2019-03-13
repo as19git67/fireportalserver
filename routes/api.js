@@ -84,70 +84,6 @@ module.exports = function (app) {
     };
   };
 
-  router.options('/keys', CORS(corsOptions)); // enable pre-flight
-
-  // check the passphrase for the own decryption key
-  // perms needed: read
-  router.get('/keys', CORS(corsOptions), authenticate, Right('read'), function (req, res, next) {
-
-    const username = req.user.name;
-    const passphrase = req.headers.password;
-    const keyName = req.headers.encryptionkeyname;
-    const u = new Users();
-
-    u.getPrivateKey(username, passphrase)
-        .then(result => {
-          const encryptionKeyName = result.encryptionKeyName;
-          if (keyName === encryptionKeyName) {
-            const pki = forge.pki;
-            let keyBuf = Buffer.from(result.encryptedPrivateKey);
-            const privateKey = pki.decryptRsaPrivateKey(keyBuf, result.passphrase);
-            if (privateKey) {
-              res.json({encryptionKeyName: result.encryptionKeyName});
-            } else {
-              res.status(403).send('Invalid password');
-            }
-          } else {
-            res.status(404).send('Invalid keyname');
-          }
-        })
-        .catch(reason => {
-          res.status(500).end();
-          console.log(`Exception while checking password: ${reason}`);
-        })
-  });
-
-  /* add a new encryption key, which replaces any current encryption key */
-  // perms needed: admin
-  router.post('/keys', CORS(corsOptions), authenticate, Right('admin'), function (req, res, next) {
-
-    const name = req.user.name;
-    const password = req.body.password;
-    // todo: check password strength
-
-    const u = new Users();
-    u.createNewKeyPair(name, password)
-        .then(result => {
-
-          // save public key in settings.json - everyone can see it
-          config.set('encryptionPublicKey', result.encryptionPublicKey);
-          config.set('encryptionKeyName', result.encryptionKeyName);
-          config.save(function (err) {
-            if (err) {
-              console.log(`Error saving RSA public key in config: ${err}`);
-              res.status(500).send('Saving the new RSA public key failed');
-            } else {
-              console.log(`New RSA public key created by user ${name}`);
-              res.json({encryptionKeyName: result.encryptionKeyName});
-            }
-          });
-        })
-        .catch(reason => {
-          res.status(500).end();
-          console.log(`Exception while creating RSA keypair: ${reason}`);
-        });
-  });
-
   router.options('/staff', CORS(corsOptions)); // enable pre-flight
 
   /* get all jobs */
@@ -332,12 +268,12 @@ module.exports = function (app) {
               let fullFilepath = path.join(debugSavePrintfiles, file.name);
               if (!path.extname(fullFilepath)) {
                 switch (file.type) {
-                case 'image/png':
-                  fullFilepath = fullFilepath + '.png';
-                  break;
-                case 'text/plain':
-                  fullFilepath = fullFilepath + '.txt';
-                  break;
+                  case 'image/png':
+                    fullFilepath = fullFilepath + '.png';
+                    break;
+                  case 'text/plain':
+                    fullFilepath = fullFilepath + '.txt';
+                    break;
                 }
               }
               fs.writeFile(fullFilepath, data, function (err) {
@@ -550,88 +486,67 @@ module.exports = function (app) {
         });
   });
 
-  router.options('/user/:name', CORS(corsOptions)); // enable pre-flight
+  router.options('/users/key', CORS(corsOptions)); // enable pre-flight
 
-  // perms needed: isAdmin
-  router.get('/user/:name', CORS(corsOptions), authenticate, Right('admin'), function (req, res, next) {
+  // check the passphrase for the own decryption key
+  // perms needed: read
+  router.get('/users/key', CORS(corsOptions), authenticate, Right('read'), function (req, res, next) {
 
-    const name = req.params.name;
-    new Users().getUserByName(name)
-        .then(user => {
-          if (user) {
-            res.json(user);
-          } else {
-            res.status(404).end();
-          }
-        })
-        .catch(reason => {
-          console.log(`ERROR retrieving user with name ${name}: ${reason}`);
-          res.status(500).end();
-        });
-  });
+    const username = req.user.name;
+    const passphrase = req.headers.password;
+    const keyName = req.headers.encryptionkeyname;
+    const u = new Users();
 
-  // perms needed: isAdmin
-  router.put('/user/:name', CORS(corsOptions), authenticate, Right('admin'), function (req, res, next) {
-    const name = req.params.name;
-    let u = new Users();
-    u.getUserByName(name)
-        .then(user => {
-          if (user) {
-            let newUserData = _.pick(req.body, 'email', 'state', 'isAdmin', 'canRead', 'canWrite', 'isAutologin');
-
-            if (req.user.name === name) { // modifying own user data?
-              if (user.isAdmin && newUserData.isAdmin !== undefined && !newUserData.isAdmin) {
-                res.status(423).send("Can't set self to non administrator");
-                return;
-              }
+    u.getPrivateKey(username, passphrase)
+        .then(result => {
+          const encryptionKeyName = result.encryptionKeyName;
+          if (keyName === encryptionKeyName) {
+            const pki = forge.pki;
+            let keyBuf = Buffer.from(result.encryptedPrivateKey);
+            const privateKey = pki.decryptRsaPrivateKey(keyBuf, result.passphrase);
+            if (privateKey) {
+              res.json({encryptionKeyName: result.encryptionKeyName});
+            } else {
+              res.status(403).send('Invalid password');
             }
-
-            let updateUser = _.extend(user, newUserData);
-
-            u.saveUser(updateUser)
-                .then(savedUser => {
-                  // todo filter user data for attributes that can go over the wire
-                  res.json(savedUser);
-                })
-                .catch(reason => {
-                  console.log(`ERROR retrieving user with name ${name}: ${reason}`);
-                  res.status(500).end();
-                });
           } else {
-            res.status(404).end();
+            res.status(404).send('Invalid keyname');
           }
         })
         .catch(reason => {
-          console.log(`ERROR retrieving user with name ${name}: ${reason}`);
           res.status(500).end();
-        });
+          console.log(`Exception while checking password: ${reason}`);
+        })
   });
 
-  // perms needed: isAdmin
-  router.delete('/user/:name', CORS(corsOptions), authenticate, Right('admin'), function (req, res, next) {
-    const name = req.params.name;
-    if (req.user.name === name) {
-      res.status(423).send("Can't delete self");
-    }
-    let u = new Users();
-    u.getUserByName(name)
-        .then(user => {
-          if (user) {
-            u.deleteUser(user.name)
-                .then(() => {
-                  res.end();
-                })
-                .catch(reason => {
-                  console.log(`ERROR deleting user with name ${name}: ${reason}`);
-                  res.status(500).end();
-                });
-          } else {
-            res.status(404).end();
-          }
+  /* add a new encryption key, which replaces any current encryption key - this can be done only, if no RSA keypair has been generated already*/
+  // perms needed: admin
+  router.post('/users/key', CORS(corsOptions), authenticate, Right('admin'), function (req, res, next) {
+
+    const name = req.user.name;
+    const password = req.body.password;
+    // todo: check password strength
+
+    const u = new Users();
+    u.createNewKeyPair(name, password)
+        .then(result => {
+
+          // save public key in settings.json - everyone can see it
+          config.set('encryptionPublicKey', result.encryptionPublicKey);
+          config.set('encryptionKeyName', result.encryptionKeyName);
+          config.save(function (err) {
+            if (err) {
+              console.log(`Error saving RSA public key in config: ${err}`);
+              res.status(500).send('Saving the new RSA public key failed');
+            } else {
+              console.log(`New RSA public key created by user ${name}`);
+              res.json({encryptionKeyName: result.encryptionKeyName});
+            }
+          });
         })
         .catch(reason => {
-          console.log(`ERROR retrieving user with name ${name}: ${reason}`);
           res.status(500).end();
+          console.log(`Exception while creating RSA keypair: ${reason}`);
         });
   });
 
@@ -721,6 +636,142 @@ module.exports = function (app) {
       console.log("Error: Rights called, but user not set in req");
       res.status(500).end();
     }
+  });
+
+  router.options('/user/:name', CORS(corsOptions)); // enable pre-flight
+
+  // perms needed: isAdmin
+  router.get('/user/:name', CORS(corsOptions), authenticate, Right('admin'), function (req, res, next) {
+
+    const name = req.params.name;
+    new Users().getUserByName(name)
+        .then(user => {
+          if (user) {
+            res.json(user);
+          } else {
+            res.status(404).end();
+          }
+        })
+        .catch(reason => {
+          console.log(`ERROR retrieving user with name ${name}: ${reason}`);
+          res.status(500).end();
+        });
+  });
+
+  // perms needed: isAdmin
+  router.put('/user/:name', CORS(corsOptions), authenticate, Right('admin'), function (req, res, next) {
+    const name = req.params.name;
+    let u = new Users();
+    u.getUserByName(name)
+        .then(user => {
+          if (user) {
+            let newUserData = _.pick(req.body, 'email', 'state', 'isAdmin', 'canRead', 'canWrite', 'isAutologin');
+
+            if (req.user.name === name) { // modifying own user data?
+              if (user.isAdmin && newUserData.isAdmin !== undefined && !newUserData.isAdmin) {
+                res.status(423).send("Can't set self to non administrator");
+                return;
+              }
+            }
+
+            let updateUser = _.extend(user, newUserData);
+
+            u.saveUser(updateUser)
+                .then(savedUser => {
+                  // todo filter user data for attributes that can go over the wire
+                  res.json(savedUser);
+                })
+                .catch(reason => {
+                  console.log(`ERROR retrieving user with name ${name}: ${reason}`);
+                  res.status(500).end();
+                });
+          } else {
+            res.status(404).end();
+          }
+        })
+        .catch(reason => {
+          console.log(`ERROR retrieving user with name ${name}: ${reason}`);
+          res.status(500).end();
+        });
+  });
+
+  // perms needed: isAdmin
+  router.delete('/user/:name', CORS(corsOptions), authenticate, Right('admin'), function (req, res, next) {
+    const name = req.params.name;
+    if (req.user.name === name) {
+      res.status(423).send("Can't delete self");
+    }
+    let u = new Users();
+    u.getUserByName(name)
+        .then(user => {
+          if (user) {
+            u.deleteUser(user.name)
+                .then(() => {
+                  res.end();
+                })
+                .catch(reason => {
+                  console.log(`ERROR deleting user with name ${name}: ${reason}`);
+                  res.status(500).end();
+                });
+          } else {
+            res.status(404).end();
+          }
+        })
+        .catch(reason => {
+          console.log(`ERROR retrieving user with name ${name}: ${reason}`);
+          res.status(500).end();
+        });
+  });
+
+  router.options('/user/:name/key', CORS(corsOptions)); // enable pre-flight
+
+  /* sets the private decryption key for another user */
+  /* body parameter that needs to be set:
+   * password: password of secured private key of current authenticated user
+   * encryptionKeyName: name of private key that should be set at the specified user
+   * targetKeyPassword: password used to encrypt private key for /user/:name
+   */
+  // perms needed: admin
+  router.post('/user/:name/key', CORS(corsOptions), authenticate, Right('admin'), function (req, res, next) {
+
+    const sourceUsername = req.user.name;
+    const sourcePrivateKeyPassword = req.body.password;
+    const sourceKeyname = req.body.encryptionKeyName;
+    const targetUsername = req.params.name;
+    const targetPrivateKeyPassword = req.body.targetKeyPassword;
+
+    const u = new Users();
+    u.migratePrivateKey(sourceUsername, sourcePrivateKeyPassword, sourceKeyname, targetUsername, targetPrivateKeyPassword)
+        .then(() => {
+          res.json({encryptionKeyName: sourceKeyname});
+        })
+        .catch(reason => {
+          res.status(500).end();
+          console.log(`Exception while checking password: ${reason}`);
+        })
+  });
+
+  /* deletes the private decryption key for another user */
+  /* header parameter to be set:
+   * encryptionKeyName: name of private key that should be deleted from the specified user
+   */
+  // perms needed: admin
+  router.delete('/user/:name/key', CORS(corsOptions), authenticate, Right('admin'), function (req, res, next) {
+
+    const encryptionKeyName = req.headers.encryptionkeyname;
+    const targetUsername = req.params.name;
+
+    console.log(`Deleting decryption key ${encryptionKeyName} from user ${targetUsername} (requested by user ${req.user.name})`);
+
+    const u = new Users();
+    u.deletePrivateKey(targetUsername, encryptionKeyName)
+        .then(() => {
+          res.end();
+        })
+        .catch(reason => {
+          res.status(500).end();
+          console.log('Exception while deleting private decryption key.', reason);
+        })
   });
 
   function _pushUpdate(req, message) {
