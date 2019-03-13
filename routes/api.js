@@ -87,17 +87,18 @@ module.exports = function (app) {
 
   // check the passphrase for the own decryption key
   // perms needed: read
-  router.get('/keys/:id', CORS(corsOptions), authenticate, Right('read'), function (req, res, next) {
+  router.get('/keys', CORS(corsOptions), authenticate, Right('read'), function (req, res, next) {
 
     const username = req.user.name;
-    const passphrase = req.body.password;
-    const keyName = req.params.id;
+    const passphrase = req.headers.password;
+    const keyName = req.headers.encryptionkeyname;
     const u = new Users();
 
     u.getPrivateKey(username, passphrase)
         .then(result => {
           const encryptionKeyName = result.encryptionKeyName;
           if (keyName === encryptionKeyName) {
+
             res.json({encryptionKeyName: result.encryptionKeyName});
           } else {
             res.status(401).end();

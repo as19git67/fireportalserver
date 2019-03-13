@@ -174,7 +174,7 @@ _.extend(Users.prototype, {
       let data = await this._initFile();
       let user = data.users[name];
       if (user) {
-        const tokenData = {
+        let tokenData = {
           accessToken: tokenValue
         };
         if (user.isAutologin) {
@@ -190,6 +190,8 @@ _.extend(Users.prototype, {
               reject(error);
             } else {
               tokenData.accessRights = self.getAccessRights(user);
+              tokenData.encryptionKeyName = user.encryptionKeyName;
+
               resolve(tokenData);
             }
           });
