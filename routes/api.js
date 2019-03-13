@@ -13,6 +13,7 @@ const Jobs = require('../Jobs');
 const Users = require('../Users');
 const Staff = require('../Staff');
 const WebSocket = require('ws');
+const forge = require('node-forge');
 
 module.exports = function (app) {
   let corsOptions = {
@@ -98,10 +99,16 @@ module.exports = function (app) {
         .then(result => {
           const encryptionKeyName = result.encryptionKeyName;
           if (keyName === encryptionKeyName) {
-
-            res.json({encryptionKeyName: result.encryptionKeyName});
+            const pki = forge.pki;
+            let keyBuf = Buffer.from(result.encryptedPrivateKey);
+            const privateKey = pki.decryptRsaPrivateKey(keyBuf, result.passphrase);
+            if (privateKey) {
+              res.json({encryptionKeyName: result.encryptionKeyName});
+            } else {
+              res.status(403).send('Invalid password');
+            }
           } else {
-            res.status(401).end();
+            res.status(404).send('Invalid keyname');
           }
         })
         .catch(reason => {
@@ -325,12 +332,12 @@ module.exports = function (app) {
               let fullFilepath = path.join(debugSavePrintfiles, file.name);
               if (!path.extname(fullFilepath)) {
                 switch (file.type) {
-                  case 'image/png':
-                    fullFilepath = fullFilepath + '.png';
-                    break;
-                  case 'text/plain':
-                    fullFilepath = fullFilepath + '.txt';
-                    break;
+                case 'image/png':
+                  fullFilepath = fullFilepath + '.png';
+                  break;
+                case 'text/plain':
+                  fullFilepath = fullFilepath + '.txt';
+                  break;
                 }
               }
               fs.writeFile(fullFilepath, data, function (err) {
