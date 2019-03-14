@@ -144,20 +144,24 @@ module.exports = function (app) {
     let newJobData;
     let data = req.body;
     let j = new Jobs();
+    const username = req.user.name;
     let originalJob = await j.getJobById(jobId);
     if (data.encrypted !== undefined) {
       if (data.encrypted && !originalJob.encrypted) {
         // encrypt job data
+        console.log(`Encrypting job ${jobId} by user ${username}...`);
         let encryptedJob = await j.encryptJob(originalJob);
+        console.log(`Encrypted job ${jobId} by user ${username}.`);
         req.app.get('backupJobs')(j); // backup jobs
         return encryptedJob;
       } else {
         if (!data.encrypted && originalJob.encrypted) {
           // decrypt job data
-          const username = req.user.name;
           const u = new Users();
           const keyObj = await u.getPrivateKey(username, data.passphrase);
+          console.log(`Decrypting job ${jobId} by user ${username}...`);
           let decryptedJob = await j.decryptJob(originalJob, keyObj);
+          console.log(`Decrypted job ${jobId} by user ${username}.`);
           req.app.get('backupJobs')(j); // backup jobs
           return decryptedJob;
         } else {
