@@ -153,7 +153,7 @@ module.exports = function (app) {
         let encryptedJob = await j.encryptJob(originalJob);
         console.log(`Encrypted job ${jobId} by user ${username}.`);
         req.app.get('backupJobs')(j); // backup jobs
-        return encryptedJob;
+        return {updatedJob: encryptedJob, decrypted: false};
       } else {
         if (!data.encrypted && originalJob.encrypted) {
           // decrypt job data
@@ -163,10 +163,10 @@ module.exports = function (app) {
           let decryptedJob = await j.decryptJob(originalJob, keyObj);
           console.log(`Decrypted job ${jobId} by user ${username}.`);
           req.app.get('backupJobs')(j); // backup jobs
-          return decryptedJob;
+          return {updatedJob: decryptedJob, decrypted: true};
         } else {
           console.log(`Warning: updateJob called with data.encrypted=${data.encrypted}, but job has already this state`);
-          return originalJob;
+          return {updatedJob: originalJob, decrypted: false};
         }
       }
     } else {
@@ -195,7 +195,7 @@ module.exports = function (app) {
     }
     let jobToSave = _.extend(originalJob, newJobData);
     let updatedJob = await j.saveJob(jobToSave);
-    return updatedJob;
+    return {updatedJob: updatedJob, decrypted: false};
   }
 
   /* update a job */
@@ -209,13 +209,19 @@ module.exports = function (app) {
       if (req.body) {
         const jobId = req.params.id;
         updateJob(jobId, req)
-            .then(updatedJob => {
+            .then(result => {
+              let updatedJob = result.updatedJob;
+              const decrypted = result.decrypted;
               delete updatedJob.images; // send back job without image, because it does not get updated
               res.json(updatedJob);
 
               setTimeout(function () {
                 // notify all clients
-                _pushUpdate(req, `updatedJob:${jobId}`);
+                if (decrypted) {
+                  _pushUpdate(req, `decryptedJob:${jobId}`);
+                } else {
+                  _pushUpdate(req, `updatedJob:${jobId}`);
+                }
               }, 1000);
             })
             .catch(reason => {
@@ -272,12 +278,12 @@ module.exports = function (app) {
               let fullFilepath = path.join(debugSavePrintfiles, file.name);
               if (!path.extname(fullFilepath)) {
                 switch (file.type) {
-                  case 'image/png':
-                    fullFilepath = fullFilepath + '.png';
-                    break;
-                  case 'text/plain':
-                    fullFilepath = fullFilepath + '.txt';
-                    break;
+                case 'image/png':
+                  fullFilepath = fullFilepath + '.png';
+                  break;
+                case 'text/plain':
+                  fullFilepath = fullFilepath + '.txt';
+                  break;
                 }
               }
               fs.writeFile(fullFilepath, data, function (err) {
@@ -519,7 +525,7 @@ module.exports = function (app) {
         })
         .catch(reason => {
           res.status(500).end();
-          console.log(`Exception while checking password: ${reason}`);
+          console.log(`Exception while verifying password: ${reason}`);
         })
   });
 
@@ -751,7 +757,7 @@ module.exports = function (app) {
         })
         .catch(reason => {
           res.status(500).end();
-          console.log(`Exception while checking password: ${reason}`);
+          console.log(`Exception while sharing private decryption key: ${reason}`);
         })
   });
 

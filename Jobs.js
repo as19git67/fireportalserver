@@ -289,7 +289,7 @@ _.extend(Jobs.prototype, {
 
       // decrypt data
       let decipher = crypto.createDecipheriv('aes-256-cbc', aesSecret, iv);
-      const encryptedText = new Buffer(job.encryptedData, 'hex');
+      const encryptedText = Buffer.from(job.encryptedData, 'hex');
       const decrypted = decipher.update(encryptedText, 'utf-8') + decipher.final('utf-8');
       try {
         let decryptedJobData = JSON.parse(decrypted.toString());
