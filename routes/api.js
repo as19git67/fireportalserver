@@ -124,19 +124,69 @@ module.exports = function (app) {
       res.status(400);
       res.end();
     } else {
-      let complete = !!req.query.complete;
+      const username = req.user.name;
       const jobId = req.params.id;
-      new Jobs().getJobById(jobId)
-          .then(job => {
-            if (job && !complete) {
-              delete job.images
-            }
-            res.json(job);
-          })
-          .catch(reason => {
-            console.log("ERROR getting job " + jobId + ": ", reason);
-            res.status(500).end();
-          });
+      const passphrase = req.headers.password;
+      const keyName = req.headers.encryptionkeyname;
+      const complete = !!req.query.complete;
+      if (passphrase && keyName) {
+        new Users().getPrivateKey(username, passphrase)
+            .then(keyObj => {
+              if (keyName === keyObj.encryptionKeyName) {
+                if (keyObj.encryptedPrivateKey && keyObj.passphrase) {
+                  let privateKey;
+                  // check passphrase before trying to decrypt to get a better error message in case the passphrase is wrong
+                  const pki = forge.pki;
+                  let keyBuf = Buffer.from(keyObj.encryptedPrivateKey);
+
+                  try {
+                    privateKey = pki.decryptRsaPrivateKey(keyBuf, keyObj.passphrase);
+                  } catch (ex) {
+                    // assume if decryptRsaPrivateKey fails that the password is wrong -> privateKey stays empty -> wrong password
+                  }
+                  if (privateKey) {
+                    // passphrase was ok ...
+                    console.log(`Decrypting job ${jobId} by user ${username}...`);
+                    new Jobs().getJobById(jobId, keyObj)
+                        .then(decryptedJob => {
+                          if (decryptedJob && !complete) {
+                            delete decryptedJob.images
+                          }
+                          res.json(decryptedJob);
+                        })
+                        .catch(reason => {
+                          console.log(`ERROR decrypting job with id ${jobId} using key ${keyName}: `, reason);
+                          res.status(500).end();
+                        });
+                  } else {
+                    res.status(403).send('Das Passwort ist falsch');
+                  }
+                } else {
+                  console.log("encryptedPrivateKey or passphrase missing in keyObj");
+                  res.status(400).end();
+                }
+              } else {
+                console.log("Name of users key differs from given key name: " + keyName);
+                res.status(400).end();
+              }
+            })
+            .catch(reason => {
+              console.log("ERROR getting private key " + keyName + ": ", reason);
+              res.status(500).end();
+            });
+      } else {
+        new Jobs().getJobById(jobId)
+            .then(job => {
+              if (job && !complete) {
+                delete job.images
+              }
+              res.json(job);
+            })
+            .catch(reason => {
+              console.log("ERROR getting job " + jobId + ": ", reason);
+              res.status(500).end();
+            });
+      }
     }
   });
 
@@ -517,7 +567,7 @@ module.exports = function (app) {
             if (privateKey) {
               res.json({encryptionKeyName: result.encryptionKeyName});
             } else {
-              res.status(403).send('Invalid password');
+              res.status(403).send('Das Passwort ist falsch');
             }
           } else {
             res.status(404).send('Invalid keyname');

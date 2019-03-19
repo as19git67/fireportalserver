@@ -52,15 +52,22 @@ _.extend(Jobs.prototype, {
     }
   },
 
-  getJobById: async function (id) {
+  // return the job data for the job identified by id
+  //  if job is encrypted and keyObj is given in the arguments, return the decrypted job
+  getJobById: async function (id, keyObj) {
     let data = await this._initFile();
-    const job = data.jobs[id];
+    let job = data.jobs[id];
     if (job) {
+      if (job.encrypted && keyObj) {
+        job = await this._decrypt(job, keyObj);
+      }
       let jobData = _.pick(job, 'id', 'encrypted', 'encryptedRandomBase64', 'encryptionRandomIvBase64', 'encryptedData', 'start', 'end', 'title',
           'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city', 'object', 'resource', 'plan', 'images',
           'attendees', 'report');
       jobData.id = id;
       return jobData;
+    } else {
+      throw new Error('Unknown job id');
     }
   },
 
