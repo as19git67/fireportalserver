@@ -10,7 +10,7 @@ module.exports.init = function (passport, callback) {
     // console.log('Bearer Strategy with token ' + accessToken);
     // console.log('BEARER Strategy');
 
-    let u = new Users();
+    let u = new Users({tokenLifetimeInMinutes: config.get('tokenLifetimeInMinutes')});
     const info = {scope: '*'};
         const bearers = config.get('bearerTokens');
     let user = bearers[accessToken];

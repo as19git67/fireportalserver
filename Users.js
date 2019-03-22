@@ -10,9 +10,13 @@ const forge = require('node-forge');
 
 let Users = module.exports = function (options) {
   options || (options = {});
-  this.tokenLifetimeInMinutes = options.tokenLifetimeInMinutes ? options.tokenLifetimeInMinutes : 60;
-  this.filename = "users.json";
+  this.tokenLifetimeInMinutes = options.tokenLifetimeInMinutes ? options.tokenLifetimeInMinutes : 3;
+  // minimum token lifetime is 3 minutes
+  if (this.tokenLifetimeInMinutes < 3) {
+    this.tokenLifetimeInMinutes = 3
+  }
 
+  this.filename = "users.json";
   this.initialize.apply(this, arguments);
 };
 
@@ -203,7 +207,49 @@ _.extend(Users.prototype, {
     }
   },
 
+  refreshToken: async function (name) {
+    const self = this;
+    let data = await this._initFile();
+    if (name === 'undefined' || !name) {
+      throw {message: 'undefined name', status: 401};
+    }
+    let user = data.users[name];
+    if (user) {
+      let now = moment();
+      if (now.isAfter(user.expiredAfter)) {
+        throw {message: 'user expired', status: 401};
+      } else {
+        if (user.state === 'provisioned') {
+          const tokenValue = hat().toString('base64');
+          let tokenData = {
+            refreshAccessToken: tokenValue
+          };
+          if (user.isAutologin) {
+            tokenData.refreshAccessTokenExpiresAfter = moment("9999-12-31");
+          } else {
+            tokenData.refreshAccessTokenExpiresAfter = moment().add(this.tokenLifetimeInMinutes, 'minutes')
+          }
+          _.extend(user, {refreshAccessToken: tokenData.refreshAccessToken, refreshAccessTokenExpiresAfter: tokenData.refreshAccessTokenExpiresAfter});
+          return new Promise((resolve, reject) => {
+            jf.writeFile(self.filename, data, {spaces: 2}, function (error) {
+              if (error) {
+                reject(error);
+              } else {
+                resolve(tokenData);
+              }
+            });
+          });
+        } else {
+          throw {message: 'user is not provisioned', status: 401};
+        }
+      }
+    } else {
+      throw new {message: "user does not exist", status: 401};
+    }
+  },
+
   verifyTokenAndGetUser: async function (name, token, newToo) {
+    const self = this;
     let data = await this._initFile();
     if (name === 'undefined' || !name) {
       throw {message: 'undefined name', status: 401};
@@ -218,8 +264,23 @@ _.extend(Users.prototype, {
         throw {message: 'user expired', status: 401};
       } else {
         if (newToo || user.state === 'provisioned') {
+          if (user.refreshAccessToken === token) {
+            console.log("Checking refresh token");
+            user.accessToken = user.refreshAccessToken;
+            delete user.refreshAccessToken;
+            user.accessTokenExpiresAfter = user.refreshAccessTokenExpiresAfter;
+            delete user.refreshAccessTokenExpiresAfter;
+            await new Promise((resolve, reject) => {
+              jf.writeFile(self.filename, data, {spaces: 2}, function (error) {
+                if (error) {
+                  reject(error);
+                } else {
+                  resolve();
+                }
+              });
+            });
+          }
           if (user.accessToken === token) {
-            let now = moment();
             if (now.isAfter(user.accessTokenExpiresAfter)) {
               throw {message: 'access token expired', status: 401};
             } else {

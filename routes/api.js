@@ -307,6 +307,73 @@ module.exports = function (app) {
     }
   });
 
+  function _makeAddress(data) {
+    let street = _.isArray(data.street) && data.street.length > 0 ? data.street[0] : data.street;
+    let streetnumber = _.isArray(data.streetnumber) && data.streetnumber.length > 0 ? data.streetnumber[0] : data.streetnumber;
+    let city = _.isArray(data.city) && data.city.length > 0 ? data.city[0] : data.city;
+    let object = _.isArray(data.object) && data.object.length > 0 ? data.object[0] : data.object;
+    let streetParts = [];
+    if (street) {
+      streetParts.push(street);
+    }
+    if (streetnumber) {
+      streetParts.push(streetnumber);
+    }
+    let streetAddress = streetParts.join(' ');
+    let addressParts = [];
+    if (streetAddress) {
+      addressParts.push(streetAddress);
+    }
+    if (city) {
+      addressParts.push(city);
+    }
+    if (object) {
+      addressParts.push(object);
+    }
+    return addressParts.join(', ');
+  }
+
+  function _parseJsonArray(value) {
+    if (_.isString(value) && value.charAt(0) === '[') {
+      try {
+        return JSON.parse(value)
+      } catch (ex) {
+        console.log(`WARNING: JSON parse failed with ${value}`)
+      }
+    } else {
+      return value
+    }
+
+  }
+
+  function _makeMaterial(data) {
+    if (data.resource) {
+      let value = _parseJsonArray(data.resource);
+      if (_.isArray(value)) {
+        let resources = _.filter(value, function (o) { return o.indexOf('erching') > 1 });
+        return resources.join(', ');
+      } else {
+        return value;
+      }
+    } else {
+      return '';
+    }
+  }
+
+  function _makeOthers(data) {
+    if (data.resource) {
+      let value = _parseJsonArray(data.resource);
+      if (_.isArray(value)) {
+        let others = _.reject(value, function (o) { return o.indexOf('erching') > 0 });
+        return others.join(', ');
+      } else {
+        return '';
+      }
+    } else {
+      return '';
+    }
+  }
+
   /* add a new job */
   // perms needed: bearerToken for full access (passed by firealarm)
   router.post('/jobs', CORS(corsOptions), authenticate, Right('admin'), function (req, res, next) {
@@ -369,7 +436,15 @@ module.exports = function (app) {
         resource: fields.resource,
         plan: fields.plan,
         // attendees: fields.attendees,
-        // report: fields.report,
+        report: {
+          incident: (fields.keyword ? fields.keyword : '') + (fields.catchword ? ', ' + fields.catchword : ''),
+          location: _makeAddress(fields),
+          duration: 0,
+          rescued: 0,
+          recovered: 0,
+          material: _makeMaterial(fields),
+          others: _makeOthers(fields)
+        },
         images: images
       };
       let j = new Jobs();
@@ -505,7 +580,7 @@ module.exports = function (app) {
     let email = req.query.email;
     let token = req.query.token;
     if (name && email && token) {
-      let u = new Users();
+      let u = new Users({tokenLifetimeInMinutes: config.get('tokenLifetimeInMinutes')});
       u.verifyTokenAndGetUser(name, token, true).then(user => {
         if (user) {
           if (email === user.email && user.state === 'new') {
@@ -529,6 +604,26 @@ module.exports = function (app) {
       });
     } else {
       res.status(400).send('Missing parameters');
+    }
+  });
+
+  router.options('/token', CORS(corsOptions)); // enable pre-flight
+
+  // refresh token -> must be logged in
+  router.get('/token', CORS(corsOptions), authenticate, function (req, res, next) {
+    if (req.user) {
+      let u = new Users({tokenLifetimeInMinutes: config.get('tokenLifetimeInMinutes')});
+      const name = req.user.name;
+      u.refreshToken(name)
+          .then(result => {
+            res.json(result);
+          })
+          .catch(reason => {
+            console.error('Refreshing access token failed: ', reason);
+            res.status(reason.status ? reason.status : 500).end();
+          });
+    } else {
+      res.status(403).send('Not authenticated');
     }
   });
 

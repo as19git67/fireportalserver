@@ -88,10 +88,8 @@ _.extend(Jobs.prototype, {
     }
   },
 
-  _addJob: async function (encrypted, start, end, title, number, keyword, catchword, longitude, latitude, street, streetnumber, city, object,
-      resource, plan,
-      images,
-      attendees) {
+  _addJob: async function (encrypted, start, end, title, number, keyword, catchword, longitude, latitude, street, streetnumber, city, object, resource, plan,
+      images, attendees, report) {
     let data = await this._initFile();
     const id = data.sequence;
     data.sequence++;
@@ -116,7 +114,8 @@ _.extend(Jobs.prototype, {
         resource: o.resource,
         plan: o.plan,
         images: o.images,
-        attendees: o.attendees
+        attendees: o.attendees,
+        report: o.report
       };
     } else {
       job = {
@@ -136,7 +135,8 @@ _.extend(Jobs.prototype, {
         resource: resource,
         plan: plan,
         images: images,
-        attendees: attendees
+        attendees: attendees,
+        report: report
       };
     }
     data.jobs[id] = job;
