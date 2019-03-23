@@ -7,8 +7,7 @@
 *.sln
 node_modules/
 /users.json
-/jobs.json
-/jobs Kopie.json
+/jobs*.json
 /settings.json
 /dist/
 /cert.pem
