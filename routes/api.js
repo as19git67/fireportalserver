@@ -450,7 +450,7 @@ module.exports = function (app) {
       let j = new Jobs();
       j.addJob(job).then(addedJob => {
         req.app.get('backupJobs')(j); // backup jobs
-        res.json(addedJob.id);
+        res.json({id: addedJob.id});
 
         // notify all clients
         const wss = req.app.get('wss');
