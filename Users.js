@@ -37,6 +37,7 @@ _.extend(Users.prototype, {
     fs.symlink(this.filename, 'locked_' + this.filename, (err) => {
       if (err) {
         if (err.code === 'EEXIST') {
+          console.log(usersDataFilename + ' is locked. Try again later...');
           setTimeout(() => {
             self._flock(resolve, reject)
           }, 50);
