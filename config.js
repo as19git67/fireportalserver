@@ -92,7 +92,7 @@ nconf.defaults({
     "token1": {"name": "user1", "canRead": true, "isAdmin": true, "expiredAfter": "2018-12-31T23:59:59.999Z"},
     "token2": {"name": "user2", "canRead": true, "isAdmin": true, "expiredAfter": "2018-12-31T23:59:59.999Z"}
   },
-  "tokenLifetimeInMinutes": 3,
+  "tokenLifetimeInMinutes": 13,
   "email_smtp_sender_email": "",
   "email_smtp_username": "",
   "email_smtp_password": "",
