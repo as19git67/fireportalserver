@@ -17,10 +17,10 @@ fs.unlink('locked_' + usersDataFilename, (err) => {
 
 let Users = module.exports = function (options) {
   options || (options = {});
-  this.tokenLifetimeInMinutes = options.tokenLifetimeInMinutes ? options.tokenLifetimeInMinutes : 3;
-  // minimum token lifetime is 3 minutes
-  if (this.tokenLifetimeInMinutes < 3) {
-    this.tokenLifetimeInMinutes = 3
+  this.tokenLifetimeInMinutes = options.tokenLifetimeInMinutes ? options.tokenLifetimeInMinutes : 6;
+  // minimum token lifetime is 6 minutes
+  if (this.tokenLifetimeInMinutes < 6) {
+    this.tokenLifetimeInMinutes = 6
   }
 
   this.filename = usersDataFilename;
