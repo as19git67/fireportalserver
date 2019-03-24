@@ -9,11 +9,22 @@ const config = require('./config');
 const forge = require('node-forge');
 
 const usersDataFilename = 'users.json';
-fs.unlink('locked_' + usersDataFilename, (err) => {
-  if (err) {
-    console.error(err);
-  }
-});
+
+function _unlockUsersDataFile() {
+  // Unlock file
+  const fn = 'locked_' + usersDataFilename;
+  fs.exists(fn, function (exists) {
+    if (exists) {
+      fs.unlink(fn, (err) => {
+        if (err) {
+          console.error(err);
+        }
+      });
+    }
+  });
+}
+
+_unlockUsersDataFile();
 
 let Users = module.exports = function (options) {
   options || (options = {});
@@ -51,12 +62,7 @@ _.extend(Users.prototype, {
   },
 
   _funlock: function () {
-    // Unlock file
-    fs.unlink('locked_' + this.filename, (err) => {
-      if (err) {
-        console.error(err);
-      }
-    });
+    _unlockUsersDataFile();
   },
 
   _initFile: function () {
