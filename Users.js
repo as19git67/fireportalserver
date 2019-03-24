@@ -326,7 +326,6 @@ _.extend(Users.prototype, {
         } else {
           if (newToo || user.state === 'provisioned') {
             if (user.refreshAccessToken === token) {
-              console.log("Checking refresh token");
               user.accessToken = user.refreshAccessToken;
               delete user.refreshAccessToken;
               user.accessTokenExpiresAfter = user.refreshAccessTokenExpiresAfter;
