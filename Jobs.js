@@ -6,14 +6,55 @@ const moment = require('moment');
 const config = require('./config');
 const crypto = require('crypto');
 
+const jobsDataFilename = 'jobs.json';
+
+function _unlockJobsDataFile() {
+  // Unlock file
+  const fn = 'locked_' + jobsDataFilename;
+  fs.exists(fn, function (exists) {
+    if (exists) {
+      fs.unlink(fn, (err) => {
+        if (err) {
+          console.error(err);
+        }
+      });
+    }
+  });
+}
+
+_unlockJobsDataFile();
+
 let Jobs = module.exports = function () {
-  this.filename = "jobs.json";
+  this.filename = jobsDataFilename;
 
   this.initialize.apply(this, arguments);
 };
 
 _.extend(Jobs.prototype, {
   initialize: function () {
+  },
+
+  // the lock function must be a recursive timer
+  _flock: function (resolve, reject) {
+    const self = this;
+    fs.symlink(this.filename, 'locked_' + this.filename, (err) => {
+      if (err) {
+        if (err.code === 'EEXIST') {
+          console.log(jobsDataFilename + ' is locked. Try again later...');
+          setTimeout(() => {
+            self._flock(resolve, reject)
+          }, 250);
+        } else {
+          reject(err);
+        }
+      } else {
+        resolve();
+      }
+    });
+  },
+
+  _funlock: function () {
+    _unlockJobsDataFile();
   },
 
   _initFile: async function () {
@@ -31,13 +72,21 @@ _.extend(Jobs.prototype, {
           });
 
         } else {
-          jf.readFile(self.filename, function (err, data) {
-            if (err) {
-              reject(err);
-            } else {
-              resolve(data)
-            }
-          });
+          new Promise((resolve, reject) => {
+            self._flock(resolve, reject);
+          })
+              .then(() => {
+                jf.readFile(self.filename, function (err, data) {
+                  if (err) {
+                    reject(err);
+                  } else {
+                    resolve(data)
+                  }
+                });
+              })
+              .catch(reason => {
+                reject(reason);
+              });
         }
       });
     });
@@ -55,126 +104,141 @@ _.extend(Jobs.prototype, {
   // return the job data for the job identified by id
   //  if job is encrypted and keyObj is given in the arguments, return the decrypted job
   getJobById: async function (id, keyObj) {
-    let data = await this._initFile();
-    let job = data.jobs[id];
-    if (job) {
-      if (job.encrypted && keyObj) {
-        job = await this._decrypt(job, keyObj);
+    try {
+      let data = await this._initFile();
+      let job = data.jobs[id];
+      if (job) {
+        if (job.encrypted && keyObj) {
+          job = await this._decrypt(job, keyObj);
+        }
+        let jobData = _.pick(job, 'id', 'encrypted', 'encryptedRandomBase64', 'encryptionRandomIvBase64', 'encryptedData', 'start', 'end', 'title',
+            'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city', 'object', 'resource', 'plan', 'images',
+            'attendees', 'report');
+        jobData.id = id;
+        return jobData;
+      } else {
+        throw new Error('Unknown job id');
       }
-      let jobData = _.pick(job, 'id', 'encrypted', 'encryptedRandomBase64', 'encryptionRandomIvBase64', 'encryptedData', 'start', 'end', 'title',
-          'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city', 'object', 'resource', 'plan', 'images',
-          'attendees', 'report');
-      jobData.id = id;
-      return jobData;
-    } else {
-      throw new Error('Unknown job id');
+    } finally {
+      this._funlock();
     }
   },
 
   /* return all jobs as array, sorted by start */
   getAll: async function () {
-    let data = await this._initFile();
-    if (data) {
-      let jobs = _.map(data.jobs, function (job, key) {
-        let oneJob = _.pick(job, 'encrypted', 'encryptedRandomBase64', 'encryptionRandomIvBase64', 'encryptedData', 'start', 'end', 'title',
-            'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city', 'object', 'resource', 'plan', 'images',
-            'attendees', 'report');
-        oneJob.id = key;
-        return oneJob;
-      });
-      return _.sortBy(jobs, 'start');
-    } else {
-      return [];
+    try {
+      let data = await this._initFile();
+      if (data) {
+        let jobs = _.map(data.jobs, function (job, key) {
+          let oneJob = _.pick(job, 'encrypted', 'encryptedRandomBase64', 'encryptionRandomIvBase64', 'encryptedData', 'start', 'end', 'title',
+              'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city', 'object', 'resource', 'plan', 'images',
+              'attendees', 'report');
+          oneJob.id = key;
+          return oneJob;
+        });
+        return _.sortBy(jobs, 'start');
+      } else {
+        return [];
+      }
+    } finally {
+      this._funlock();
     }
   },
 
   _addJob: async function (encrypted, start, end, title, number, keyword, catchword, longitude, latitude, street, streetnumber, city, object, resource, plan,
       images, attendees, report) {
-    let data = await this._initFile();
-    const id = data.sequence;
-    data.sequence++;
-    let job;
+    try {
+      let data = await this._initFile();
+      const id = data.sequence;
+      data.sequence++;
+      let job;
 
-    if (_.isObject(encrypted)) {
-      let o = encrypted;
-      job = {
-        encrypted: o.encrypted,
-        start: o.start,
-        end: o.end,
-        title: o.title,
-        number: o.number,
-        keyword: o.keyword,
-        catchword: o.catchword,
-        longitude: o.longitude,
-        latitude: o.latitude,
-        street: o.street,
-        streetnumber: o.streetnumber,
-        city: o.city,
-        object: o.object,
-        resource: o.resource,
-        plan: o.plan,
-        images: o.images,
-        attendees: o.attendees,
-        report: o.report
-      };
-    } else {
-      job = {
-        encrypted: encrypted,
-        start: start,
-        end: end,
-        title: title,
-        number: number,
-        keyword: keyword,
-        catchword: catchword,
-        longitude: longitude,
-        latitude: latitude,
-        street: street,
-        streetnumber: streetnumber,
-        city: city,
-        object: object,
-        resource: resource,
-        plan: plan,
-        images: images,
-        attendees: attendees,
-        report: report
-      };
+      if (_.isObject(encrypted)) {
+        let o = encrypted;
+        job = {
+          encrypted: o.encrypted,
+          start: o.start,
+          end: o.end,
+          title: o.title,
+          number: o.number,
+          keyword: o.keyword,
+          catchword: o.catchword,
+          longitude: o.longitude,
+          latitude: o.latitude,
+          street: o.street,
+          streetnumber: o.streetnumber,
+          city: o.city,
+          object: o.object,
+          resource: o.resource,
+          plan: o.plan,
+          images: o.images,
+          attendees: o.attendees,
+          report: o.report
+        };
+      } else {
+        job = {
+          encrypted: encrypted,
+          start: start,
+          end: end,
+          title: title,
+          number: number,
+          keyword: keyword,
+          catchword: catchword,
+          longitude: longitude,
+          latitude: latitude,
+          street: street,
+          streetnumber: streetnumber,
+          city: city,
+          object: object,
+          resource: resource,
+          plan: plan,
+          images: images,
+          attendees: attendees,
+          report: report
+        };
+      }
+      data.jobs[id] = job;
+
+      return new Promise((resolve, reject) => {
+        jf.writeFile(this.filename, data, {spaces: 2})
+            .then(() => {
+              resolve(job);
+            })
+            .catch(reason => {
+              reject(reason);
+            });
+      });
+    } finally {
+      this._funlock();
     }
-    data.jobs[id] = job;
-
-    return new Promise((resolve, reject) => {
-      jf.writeFile(this.filename, data, {spaces: 2})
-          .then(() => {
-            resolve(job);
-          })
-          .catch(reason => {
-            reject(reason);
-          });
-    });
   },
 
   backupJobs: function () {
     const filename = path.join(__dirname, `jobs.backup.${moment().format('YYYY-MM-DD__HH.mm.ss')}.json`);
     console.log(`Jobs backup started. Backup file is ${filename}`);
+    try {
+      this._initFile()
+          .then(data => {
+            const encryptedJobs = {};
+            const encryptedJobsAsArray = _.where(data.jobs, {encrypted: true});
+            _.each(encryptedJobsAsArray, function (job) {
+              encryptedJobs[job.id] = job;
+            });
 
-    this._initFile()
-        .then(data => {
-          const encryptedJobs = {};
-          const encryptedJobsAsArray = _.where(data.jobs, {encrypted: true});
-          _.each(encryptedJobsAsArray, function (job) {
-            encryptedJobs[job.id] = job;
+            jf.writeFile(filename, {jobs: encryptedJobs, sequence: data.sequence}, {spaces: 2})
+                .then(() => {
+                  console.log(`Backup of encrypted jobs written to ${filename}.`)
+                })
+                .catch(reason => {
+                  console.log(`EXCEPTION while writing the jobs backup file ${filename}: ${reason}`)
+                });
+          })
+          .catch(reason => {
+            console.log(`EXCEPTION while backing up jobs: ${reason}`)
           });
-
-          jf.writeFile(filename, {jobs: encryptedJobs, sequence: data.sequence}, {spaces: 2})
-              .then(() => {
-                console.log(`Backup of encrypted jobs written to ${filename}.`)
-              })
-              .catch(reason => {
-                console.log(`EXCEPTION while writing the jobs backup file ${filename}: ${reason}`)
-              });
-        })
-        .catch(reason => {
-          console.log(`EXCEPTION while backing up jobs: ${reason}`)
-        });
+    } finally {
+      this._funlock();
+    }
   },
 
   /* updates job information */
@@ -184,27 +248,32 @@ _.extend(Jobs.prototype, {
       console.log(err);
       throw new Error(err);
     }
-    let data = await this._initFile();
-    if (data.jobs[job.id]) {
-      if (data.jobs[job.id].encrypted) {
-        throw new Error('job is encrypted');
+    try {
+      let data = await this._initFile();
+
+      if (data.jobs[job.id]) {
+        if (data.jobs[job.id].encrypted) {
+          throw new Error('job is encrypted');
+        } else {
+          _.extend(data.jobs[job.id],
+              _.pick(job, 'encrypted', 'start', 'end', 'title', 'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street',
+                  'streetnumber', 'city',
+                  'object', 'resource', 'plan', 'images', 'attendees', 'report'));
+          return new Promise((resolve, reject) => {
+            jf.writeFile(this.filename, data, {spaces: 2})
+                .then(() => {
+                  resolve(data.jobs[job.id]);
+                })
+                .catch(reason => {
+                  reject(reason);
+                });
+          });
+        }
       } else {
-        _.extend(data.jobs[job.id],
-            _.pick(job, 'encrypted', 'start', 'end', 'title', 'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street',
-                'streetnumber', 'city',
-                'object', 'resource', 'plan', 'images', 'attendees', 'report'));
-        return new Promise((resolve, reject) => {
-          jf.writeFile(this.filename, data, {spaces: 2})
-              .then(() => {
-                resolve(data.jobs[job.id]);
-              })
-              .catch(reason => {
-                reject(reason);
-              });
-        });
+        throw new Error("Job does not exist")
       }
-    } else {
-      throw new Error("Job does not exist")
+    } finally {
+      this._funlock();
     }
   },
 
@@ -214,17 +283,21 @@ _.extend(Jobs.prototype, {
       console.log(err);
       throw new Error(err);
     }
-    let data = await this._initFile();
-    delete data.jobs[id];
-    return new Promise((resolve, reject) => {
-      jf.writeFile(this.filename, data, {spaces: 2})
-          .then(() => {
-            resolve(id);
-          })
-          .catch(reason => {
-            reject(reason);
-          });
-    });
+    try {
+      let data = await this._initFile();
+      delete data.jobs[id];
+      return new Promise((resolve, reject) => {
+        jf.writeFile(this.filename, data, {spaces: 2})
+            .then(() => {
+              resolve(id);
+            })
+            .catch(reason => {
+              reject(reason);
+            });
+      });
+    } finally {
+      this._funlock();
+    }
   },
 
   _encrypt: async function (job) {
@@ -311,24 +384,28 @@ _.extend(Jobs.prototype, {
 
   _prepareJobByIdOrObj: async function (id) {
     let job, data;
-    if (_.isObject(id)) {
-      job = id; // job was passed instead id
-      if (job.id === undefined) {
-        throw new Error('job object has no id');
+    try {
+      if (_.isObject(id)) {
+        job = id; // job was passed instead id
+        if (job.id === undefined) {
+          throw new Error('job object has no id');
+        }
+        data = await this._initFile();
+      } else {
+        if (id === undefined) {
+          throw new Error('id is undefined');
+        }
+        data = await this._initFile();
+        job = data.jobs[id];
+        if (!job) {
+          throw new Error(`there is no job with id ${id}`);
+        }
+        job.id = id;
       }
-      data = await this._initFile();
-    } else {
-      if (id === undefined) {
-        throw new Error('id is undefined');
-      }
-      data = await this._initFile();
-      job = data.jobs[id];
-      if (!job) {
-        throw new Error(`there is no job with id ${id}`);
-      }
-      job.id = id;
+      return {job, data};
+    } finally {
+      this._funlock();
     }
-    return {job, data};
   },
 
   encryptJob: function (id) {
@@ -347,6 +424,8 @@ _.extend(Jobs.prototype, {
       } catch (ex) {
         ex.message = `ERROR while encrypting job: ${ex.message}`;
         reject(ex);
+      } finally {
+        this._funlock();
       }
     });
   },
@@ -367,6 +446,9 @@ _.extend(Jobs.prototype, {
       } catch (ex) {
         ex.message = `decrypting job: ${ex.message}`;
         reject(ex);
+
+      } finally {
+        this._funlock();
       }
     });
   }

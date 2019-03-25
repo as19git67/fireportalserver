@@ -51,7 +51,7 @@ _.extend(Users.prototype, {
           console.log(usersDataFilename + ' is locked. Try again later...');
           setTimeout(() => {
             self._flock(resolve, reject)
-          }, 50);
+          }, 250);
         } else {
           reject(err);
         }
@@ -129,22 +129,25 @@ _.extend(Users.prototype, {
 
   getUserByEmail: async function (email, options) {
     options || (options = {});
-    let data = await this._initFile();
-    let user = _.findWhere(data.users, {email: email});
-    this._funlock();
-    if (user) {
-      return {
-        username: user.username,
-        email: user.email,
-        state: user.state,
-        canRead: user.canRead,
-        canWrite: user.canWrite,
-        isAdmin: user.isAdmin,
-        isAutologin: user.isAutologin,
-        encryptionKeyName: user.encryptionKeyName
-      };
-    } else {
-      console.log("User with email ", email, " does not exist.");
+    try {
+      let data = await this._initFile();
+      let user = _.findWhere(data.users, {email: email});
+      if (user) {
+        return {
+          username: user.username,
+          email: user.email,
+          state: user.state,
+          canRead: user.canRead,
+          canWrite: user.canWrite,
+          isAdmin: user.isAdmin,
+          isAutologin: user.isAutologin,
+          encryptionKeyName: user.encryptionKeyName
+        };
+      } else {
+        console.log("User with email ", email, " does not exist.");
+      }
+    } finally {
+      this._funlock();
     }
   },
 
@@ -189,34 +192,37 @@ _.extend(Users.prototype, {
     if (name === 'undefined' || !name) {
       throw new Error('undefined name');
     }
-    let data = await this._initFile();
-    const user = data.users[name];
-    this._funlock();
-    if (user) {
-      return new Promise((resolve, reject) => {
-        let tokenValidates = speakeasy.totp.verify({
-          secret: user.secret,
-          encoding: 'base32',
-          token: code,
-          window: 6
-        });
+    try {
+      let data = await this._initFile();
+      const user = data.users[name];
+      if (user) {
+        return new Promise((resolve, reject) => {
+          let tokenValidates = speakeasy.totp.verify({
+            secret: user.secret,
+            encoding: 'base32',
+            token: code,
+            window: 6
+          });
 
-        if (process.env.NODE_ENV === 'development' && code === '000000') {
-          console.log("WARNING: token validation bypassed for debugging");
-          resolve(true);
-          return;
-        }
-
-        setTimeout(function () {
-          if (tokenValidates) {
+          if (process.env.NODE_ENV === 'development' && code === '000000') {
+            console.log("WARNING: token validation bypassed for debugging");
             resolve(true);
-          } else {
-            reject('Code verification failed');
+            return;
           }
-        }, 2 * 1000);
-      });
-    } else {
-      throw new Error('Unknown user');
+
+          setTimeout(function () {
+            if (tokenValidates) {
+              resolve(true);
+            } else {
+              reject('Code verification failed');
+            }
+          }, 2 * 1000);
+        });
+      } else {
+        throw new Error('Unknown user');
+      }
+    } finally {
+      this._funlock();
     }
   },
 
