@@ -128,26 +128,33 @@ _.extend(Users.prototype, {
       throw new Error('username undefined');
     }
     const self = this;
-    let existingUser = await this.getUserByName(username);
-    if (existingUser) {
-      if (existingUser.state === "new") {
-        await self.deleteUser(existingUser.name)
-      } else {
-        throw new Error("Can't create user " + username + ", because it already exists");
+    try {
+      console.log(`createUser: _initFile`);
+      await this._initFile();
+      let existingUser = await this.getUserByName(username, true);
+      if (existingUser) {
+        if (existingUser.state === "new") {
+          await self.deleteUser(existingUser.name, true)
+        } else {
+          throw new Error("Can't create user " + username + ", because it already exists");
+        }
       }
+      // generate accessToken already at this state to be able to use it in the confirmation URL
+      const tokenData = {
+        accessToken: hat().toString('base64'),
+        accessTokenExpiresAfter: moment().add(2, 'days')
+      };
+      // secretData is for totp code based authentication
+      const secretData = {
+        secret: speakeasy.generateSecret().base32,
+        expiredAfter: tokenData.accessTokenExpiresAfter
+      };
+      let user = await self._addUser(username, email, secretData, tokenData, true);
+      return user;
+    } finally {
+      console.log(`createUser: unlocking - finally`);
+      this._funlock();
     }
-    // generate accessToken already at this state to be able to use it in the confirmation URL
-    const tokenData = {
-      accessToken: hat().toString('base64'),
-      accessTokenExpiresAfter: moment().add(2, 'days')
-    };
-    // secretData is for totp code based authentication
-    const secretData = {
-      secret: speakeasy.generateSecret().base32,
-      expiredAfter: tokenData.accessTokenExpiresAfter
-    };
-    let user = await self._addUser(username, email, secretData, tokenData);
-    return user;
   },
 
   getUserByEmail: async function (email, options) {
@@ -500,13 +507,13 @@ _.extend(Users.prototype, {
     }
   },
 
-  _addUser: async function (name, email, secretData, tokenData) {
+  _addUser: async function (name, email, secretData, tokenData, noLock) {
     if (name === 'undefined' || !name) {
       throw new Error('undefined name');
     }
     try {
-      console.log(`_addUser: _initFile`);
-      let data = await this._initFile();
+      console.log(`_addUser: _initFile (noLock: ${noLock})`);
+      let data = await this._initFile(noLock);
       if (data.users[name]) {
         throw new Error("Can't add existing user");
       } else {
@@ -541,8 +548,10 @@ _.extend(Users.prototype, {
         return userToReturn;
       }
     } finally {
-      console.log(`_addUser: unlocking - finally`);
-      this._funlock();
+      if (!noLock) {
+        console.log(`_addUser: unlocking - finally`);
+        this._funlock();
+      }
     }
   },
 
@@ -697,6 +706,7 @@ _.extend(Users.prototype, {
 
   deletePrivateKey: async function (username, encryptionKeyName) {
     try {
+      console.log(`deletePrivateKey: _initFile`);
       let data = await this._initFile();
       const user = data.users[username];
       if (!user) {
@@ -711,8 +721,9 @@ _.extend(Users.prototype, {
       user.encryptionPrivateKeySalt = '';
 
       await this.saveUser(user);
-      return await this.getUserByName(username);
+      return await this.getUserByName(username, true);
     } finally {
+      console.log(`deletePrivateKey: unlocking - finally`);
       this._funlock();
     }
   },
@@ -764,14 +775,14 @@ _.extend(Users.prototype, {
     }
   },
 
-  deleteUser: async function (name) {
+  deleteUser: async function (name, noLock) {
     if (!name) {
       const err = "ERROR: attempt to delete user with undefined name";
       throw new Error(err);
     }
-    const self = this;
     try {
-      let data = await this._initFile();
+      console.log(`deleteUser: _initFile (noLock: ${noLock})`);
+      let data = await this._initFile(noLock);
       let user = data.users[name];
       if (user.isAdmin) {
         let otherAdmin = _.find(data.users, function (u) {
@@ -790,17 +801,24 @@ _.extend(Users.prototype, {
         }
       }
       delete data.users[name];
+      const filename = this.filename;
       await new Promise((resolve, reject) => {
-        jf.writeFile(self.filename, data, {spaces: 2}, function (error) {
+        jf.writeFile(filename, data, {spaces: 2}, function (error) {
           if (error) {
+            console.log(`deleteUser: error writing ${filename}`);
             reject(error);
           } else {
+            console.log(`deleteUser: ${filename} written`);
             resolve();
           }
         });
+        console.log(`deleteUser: started writing ${filename}`);
       });
     } finally {
-      this._funlock();
+      if (!noLock) {
+        console.log(`deleteUser: unlocking - finally`);
+        this._funlock();
+      }
     }
   }
 });
