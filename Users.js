@@ -9,19 +9,24 @@ const config = require('./config');
 const forge = require('node-forge');
 
 const usersDataFilename = 'users.json';
+let usersDataFileLocked = false;
 
 function _unlockUsersDataFile() {
-  // Unlock file
-  const fn = 'locked_' + usersDataFilename;
-  fs.exists(fn, function (exists) {
-    if (exists) {
-      fs.unlink(fn, (err) => {
-        if (err) {
-          console.error(err);
-        }
-      });
-    }
-  });
+  usersDataFileLocked = false;
+
+  /*
+    // Unlock file
+    const fn = 'locked_' + usersDataFilename;
+    fs.exists(fn, function (exists) {
+      if (exists) {
+        fs.unlink(fn, (err) => {
+          if (err) {
+            console.error(err);
+          }
+        });
+      }
+    });
+  */
 }
 
 _unlockUsersDataFile();
@@ -45,27 +50,40 @@ _.extend(Users.prototype, {
   // the lock function must be a recursive timer
   _flock: function (resolve, reject) {
     const self = this;
-    fs.symlink(this.filename, 'locked_' + this.filename, (err) => {
-      if (err) {
-        if (err.code === 'EEXIST') {
-          console.log(usersDataFilename + ' is locked. Try again later...');
-          setTimeout(() => {
-            self._flock(resolve, reject)
-          }, 250);
-        } else {
-          reject(err);
-        }
-      } else {
-        resolve();
-      }
-    });
+    if (usersDataFileLocked) {
+      console.log(usersDataFilename + ' is locked. Trying again later...');
+      setTimeout(() => {
+        self._flock(resolve, reject)
+      }, 250);
+    } else {
+      usersDataFileLocked = true;
+      resolve();
+    }
+
+    /*
+        const self = this;
+        fs.symlink(this.filename, 'locked_' + this.filename, (err) => {
+          if (err) {
+            if (err.code === 'EEXIST') {
+              console.log(usersDataFilename + ' is locked. Try again later...');
+              setTimeout(() => {
+                self._flock(resolve, reject)
+              }, 250);
+            } else {
+              reject(err);
+            }
+          } else {
+            resolve();
+          }
+        });
+    */
   },
 
   _funlock: function () {
     _unlockUsersDataFile();
   },
 
-  _initFile: function () {
+  _initFile: function (noLock) {
     const self = this;
     return new Promise((resolve, reject) => {
       fs.exists(this.filename, function (exists) {
@@ -81,7 +99,12 @@ _.extend(Users.prototype, {
 
         } else {
           new Promise((resolve, reject) => {
-            self._flock(resolve, reject);
+            if (noLock) {
+              console.log(`_initFile: not locking`);
+              resolve();
+            } else {
+              self._flock(resolve, reject);
+            }
           })
               .then(() => {
                 jf.readFile(self.filename, function (err, data) {
@@ -130,8 +153,10 @@ _.extend(Users.prototype, {
   getUserByEmail: async function (email, options) {
     options || (options = {});
     try {
+      console.log(`getUserByEmail: _initFile`);
       let data = await this._initFile();
       let user = _.findWhere(data.users, {email: email});
+      console.log(`getUserByEmail: returning`);
       if (user) {
         return {
           username: user.username,
@@ -147,28 +172,37 @@ _.extend(Users.prototype, {
         console.log("User with email ", email, " does not exist.");
       }
     } finally {
+      console.log(`getUserByEmail: unlocking - finally`);
       this._funlock();
     }
   },
 
-  getUserByName: async function (name) {
+  getUserByName: async function (name, noLock) {
     if (name === 'undefined') {
       throw new Error('undefined name');
     }
-    let data = await this._initFile();
-    const user = data.users[name];
-    this._funlock();
-    if (user) {
-      return {
-        name: user.name,
-        email: user.email,
-        state: user.state,
-        canRead: user.canRead,
-        canWrite: user.canWrite,
-        isAdmin: user.isAdmin,
-        isAutologin: user.isAutologin,
-        encryptionKeyName: user.encryptionKeyName
-      };
+    try {
+      console.log(`getUserByName: _initFile`);
+      let data = await this._initFile(noLock);
+      const user = data.users[name];
+      console.log(`getUserByName: returning`);
+      if (user) {
+        return {
+          name: user.name,
+          email: user.email,
+          state: user.state,
+          canRead: user.canRead,
+          canWrite: user.canWrite,
+          isAdmin: user.isAdmin,
+          isAutologin: user.isAutologin,
+          encryptionKeyName: user.encryptionKeyName
+        };
+      }
+    } finally {
+      if (!noLock) {
+        console.log(`getUserByName: unlocking - finally`);
+        this._funlock();
+      }
     }
   },
 
@@ -176,15 +210,21 @@ _.extend(Users.prototype, {
     if (name === 'undefined') {
       throw new Error('undefined name');
     }
-    let data = await this._initFile();
-    const user = data.users[name];
-    this._funlock();
-    if (user) {
-      const otpauthURL = speakeasy.otpauthURL({secret: user.secret, encoding: 'base32', label: user.email, issuer: issuer});
-      return {
-        secret: user.secret,
-        otpauthURL: otpauthURL
-      };
+    try {
+      console.log(`getUserSecretByName: _initFile`);
+      let data = await this._initFile();
+      const user = data.users[name];
+      console.log(`getUserSecretByName: returning`);
+      if (user) {
+        const otpauthURL = speakeasy.otpauthURL({secret: user.secret, encoding: 'base32', label: user.email, issuer: issuer});
+        return {
+          secret: user.secret,
+          otpauthURL: otpauthURL
+        };
+      }
+    } finally {
+      console.log(`getUserSecretByName: unlocking - finally`);
+      this._funlock();
     }
   },
 
@@ -193,16 +233,11 @@ _.extend(Users.prototype, {
       throw new Error('undefined name');
     }
     try {
+      console.log(`verifyCode: _initFile, name: ${name}`);
       let data = await this._initFile();
       const user = data.users[name];
       if (user) {
-        return new Promise((resolve, reject) => {
-          let tokenValidates = speakeasy.totp.verify({
-            secret: user.secret,
-            encoding: 'base32',
-            token: code,
-            window: 6
-          });
+        let ok = await new Promise((resolve, reject) => {
 
           if (process.env.NODE_ENV === 'development' && code === '000000') {
             console.log("WARNING: token validation bypassed for debugging");
@@ -210,18 +245,25 @@ _.extend(Users.prototype, {
             return;
           }
 
+          let tokenValidates = speakeasy.totp.verify({
+            secret: user.secret,
+            encoding: 'base32',
+            token: code,
+            window: 6
+          });
+
+          console.log(`verifyCode: waiting artificially before resolving promise with ${tokenValidates}`);
           setTimeout(function () {
-            if (tokenValidates) {
-              resolve(true);
-            } else {
-              reject('Code verification failed');
-            }
+            resolve(tokenValidates);
           }, 2 * 1000);
         });
+        console.log(`verifyCode: returning ${ok}`);
+        return ok;
       } else {
         throw new Error('Unknown user');
       }
     } finally {
+      console.log(`verifyCode: unlocking - finally`);
       this._funlock();
     }
   },
@@ -231,11 +273,13 @@ _.extend(Users.prototype, {
       throw new Error('undefined name');
     }
 
-    try {
-      let codeOk = await this.verifyCode(name, code);
-      if (codeOk) {
-        const tokenValue = hat().toString('base64');
-        const self = this;
+    let codeOk = await this.verifyCode(name, code);
+    if (codeOk) {
+      const tokenValue = hat().toString('base64');
+      const self = this;
+      const filename = this.filename;
+      try {
+        console.log(`verifyCodeAndCreateAccessTokenForUser: _initFile`);
         let data = await this._initFile();
         let user = data.users[name];
         if (user) {
@@ -249,33 +293,40 @@ _.extend(Users.prototype, {
             tokenData.accessTokenExpiresAfter = moment().add(this.tokenLifetimeInMinutes, 'minutes')
           }
           _.extend(user, {accessToken: tokenData.accessToken, accessTokenExpiresAfter: tokenData.accessTokenExpiresAfter});
-          return new Promise((resolve, reject) => {
-            jf.writeFile(self.filename, data, {spaces: 2}, function (error) {
+          let tokenDataToReturn = await new Promise((resolve, reject) => {
+            jf.writeFile(filename, data, {spaces: 2}, function (error) {
               if (error) {
+                console.log(`verifyCodeAndCreateAccessTokenForUser: error writing ${filename}`);
                 reject(error);
               } else {
+                console.log(`verifyCodeAndCreateAccessTokenForUser: ${filename} written`);
                 tokenData.accessRights = self.getAccessRights(user);
                 tokenData.encryptionKeyName = user.encryptionKeyName;
                 resolve(tokenData);
               }
             });
+            console.log(`verifyCodeAndCreateAccessTokenForUser: started writing ${filename}`);
           });
+          console.log(`verifyCodeAndCreateAccessTokenForUser: returning token`);
+          return tokenDataToReturn;
         } else {
           throw new Error("User does not exist");
         }
+      } finally {
+        console.log(`verifyCodeAndCreateAccessTokenForUser: unlocking - finally`);
+        this._funlock();
       }
-    } finally {
-      this._funlock();
     }
   },
 
   refreshToken: async function (name) {
-    const self = this;
+    if (name === 'undefined' || !name) {
+      throw {message: 'undefined name', status: 401};
+    }
+    const filename = this.filename;
     try {
+      console.log(`refreshToken: _initFile`);
       let data = await this._initFile();
-      if (name === 'undefined' || !name) {
-        throw {message: 'undefined name', status: 401};
-      }
       let user = data.users[name];
       if (user) {
         let now = moment();
@@ -293,15 +344,20 @@ _.extend(Users.prototype, {
               tokenData.refreshAccessTokenExpiresAfter = moment().add(this.tokenLifetimeInMinutes, 'minutes')
             }
             _.extend(user, {refreshAccessToken: tokenData.refreshAccessToken, refreshAccessTokenExpiresAfter: tokenData.refreshAccessTokenExpiresAfter});
-            return new Promise((resolve, reject) => {
-              jf.writeFile(self.filename, data, {spaces: 2}, function (error) {
+            const tokenDataToReturn = await new Promise((resolve, reject) => {
+              jf.writeFile(filename, data, {spaces: 2}, function (error) {
                 if (error) {
+                  console.log(`refreshToken: error writing ${filename}`);
                   reject(error);
                 } else {
+                  console.log(`refreshToken: ${filename} written`);
                   resolve(tokenData);
                 }
               });
+              console.log(`refreshToken: started writing ${filename}`);
             });
+            console.log(`refreshToken: returning token`);
+            return tokenDataToReturn;
           } else {
             throw {message: 'user is not provisioned', status: 401};
           }
@@ -310,13 +366,14 @@ _.extend(Users.prototype, {
         throw new {message: "user does not exist", status: 401};
       }
     } finally {
+      console.log(`refreshToken: unlocking - finally`);
       this._funlock();
     }
   },
 
   verifyTokenAndGetUser: async function (name, token, newToo) {
-    const self = this;
     try {
+      console.log(`verifyTokenAndGetUser: _initFile, name: ${name}`);
       let data = await this._initFile();
       if (name === 'undefined' || !name) {
         throw {message: 'undefined name', status: 401};
@@ -336,20 +393,25 @@ _.extend(Users.prototype, {
               delete user.refreshAccessToken;
               user.accessTokenExpiresAfter = user.refreshAccessTokenExpiresAfter;
               delete user.refreshAccessTokenExpiresAfter;
+              const filename = this.filename;
               await new Promise((resolve, reject) => {
-                jf.writeFile(self.filename, data, {spaces: 2}, function (error) {
+                jf.writeFile(filename, data, {spaces: 2}, function (error) {
                   if (error) {
+                    console.log(`verifyTokenAndGetUser: error writing ${filename}`);
                     reject(error);
                   } else {
+                    console.log(`verifyTokenAndGetUser: ${filename} written`);
                     resolve();
                   }
                 });
+                console.log(`verifyTokenAndGetUser: started writing ${filename}`);
               });
             }
             if (user.accessToken === token) {
               if (now.isAfter(user.accessTokenExpiresAfter)) {
                 throw {message: 'access token expired', status: 401};
               } else {
+                console.log(`verifyTokenAndGetUser: returning user data`);
                 return _.pick(user, 'name', 'email', 'state', 'canRead', 'canWrite', 'isAdmin', 'expiredAfter', 'encryptionKeyName');
               }
             } else {
@@ -363,6 +425,7 @@ _.extend(Users.prototype, {
         throw new {message: "user does not exist", status: 401};
       }
     } finally {
+      console.log(`verifyTokenAndGetUser: unlocking - finally`);
       this._funlock();
     }
   },
@@ -401,6 +464,7 @@ _.extend(Users.prototype, {
 
   getAll: async function () {
     try {
+      console.log(`getAll: _initFile`);
       let data = await this._initFile();
       if (data) {
         // let notExpiredUsers = _.filter(data.users, function (user) {
@@ -412,6 +476,7 @@ _.extend(Users.prototype, {
         //     return moment().isBefore(ea)
         //   }
         // });
+        console.log(`getAll: returning user data`);
         return _.map(data.users, function (user) {
           return {
             name: user.name,
@@ -426,19 +491,21 @@ _.extend(Users.prototype, {
           };
         });
       } else {
+        console.log(`getAll: returning empty list of user data`);
         return [];
       }
     } finally {
+      console.log(`getAll: unlocking - finally`);
       this._funlock();
     }
   },
 
   _addUser: async function (name, email, secretData, tokenData) {
-    const self = this;
     if (name === 'undefined' || !name) {
       throw new Error('undefined name');
     }
     try {
+      console.log(`_addUser: _initFile`);
       let data = await this._initFile();
       if (data.users[name]) {
         throw new Error("Can't add existing user");
@@ -457,17 +524,24 @@ _.extend(Users.prototype, {
           accessTokenExpiresAfter: tokenData.accessTokenExpiresAfter
         };
         data.users[user.name] = user;
-        return new Promise((resolve, reject) => {
-          jf.writeFile(self.filename, data, {spaces: 2}, function (error) {
+        const filename = this.filename;
+        const userToReturn = await new Promise((resolve, reject) => {
+          jf.writeFile(filename, data, {spaces: 2}, function (error) {
             if (error) {
+              console.log(`_addUser: error writing ${filename}`);
               reject(error);
             } else {
+              console.log(`_addUser: ${filename} written`);
               resolve(user);
             }
           });
+          console.log(`_addUser: started writing ${filename}`);
         });
+        console.log(`_addUser: returning user data`);
+        return userToReturn;
       }
     } finally {
+      console.log(`_addUser: unlocking - finally`);
       this._funlock();
     }
   },
@@ -482,60 +556,66 @@ _.extend(Users.prototype, {
   },
 
   createNewKeyPair: async function (username, password) {
-    let user = await this.getUserByName(username);
-    if (user) {
-      return new Promise((resolve, reject) => {
+    try {
+      console.log(`createNewKeyPair: _initFile`);
+      await this._initFile();  // init to lock the datafile
+      let user = await this.getUserByName(username, true);
+      if (user) {
+        return new Promise((resolve, reject) => {
 
-        // create random salt
-        const salt = crypto.randomBytes(32).toString('base64');
+          // create random salt
+          const salt = crypto.randomBytes(32).toString('base64');
 
-        const pwHash = this._createHashPassword(password, salt);
+          const pwHash = this._createHashPassword(password, salt);
 
-        // create new RSA keypair
-        crypto.generateKeyPair('rsa', {
-          modulusLength: 4096,
-          publicKeyEncoding: {
-            type: 'spki',
-            format: 'pem'
-          },
-          privateKeyEncoding: {
-            type: 'pkcs8',
-            format: 'pem',
-            cipher: 'aes-256-cbc',
-            passphrase: pwHash
-          }
-        }, async (err, publicKey, privateKey) => {
-          if (err) {
-            reject(err);
-            return;
-          }
+          // create new RSA keypair
+          crypto.generateKeyPair('rsa', {
+            modulusLength: 4096,
+            publicKeyEncoding: {
+              type: 'spki',
+              format: 'pem'
+            },
+            privateKeyEncoding: {
+              type: 'pkcs8',
+              format: 'pem',
+              cipher: 'aes-256-cbc',
+              passphrase: pwHash
+            }
+          }, async (err, publicKey, privateKey) => {
+            if (err) {
+              reject(err);
+              return;
+            }
 
-          // // create new AES256 encryption key
-          // const aesKeyAsBase64 = crypto.randomBytes(32).toString('base64');
-          // // encrypt the encryption key with pwHash
-          // const aesKeySecured = _encrypt(aesKeyAsBase64, pwHash, iv);
+            // // create new AES256 encryption key
+            // const aesKeyAsBase64 = crypto.randomBytes(32).toString('base64');
+            // // encrypt the encryption key with pwHash
+            // const aesKeySecured = _encrypt(aesKeyAsBase64, pwHash, iv);
 
-          const keyName = `${username}-${moment().format()}`;
+            const keyName = `${username}-${moment().format()}`;
 
-          // todo lock users.json file during read and write for consistency
-          user.encryptedPrivateKey = privateKey;
-          user.encryptionPrivateKeySalt = salt;
-          user.encryptionKeyName = keyName;
-          let savedUser = await this.saveUser(user);
-          resolve({encryptionKeyName: savedUser.encryptionKeyName, encryptionPublicKey: publicKey});
+            user.encryptedPrivateKey = privateKey;
+            user.encryptionPrivateKeySalt = salt;
+            user.encryptionKeyName = keyName;
+            let savedUser = await this.saveUser(user);
+            resolve({encryptionKeyName: savedUser.encryptionKeyName, encryptionPublicKey: publicKey});
+          });
         });
-      });
-    } else {
-      throw new Error(`User ${username} does not exist`);
+      } else {
+        throw new Error(`User ${username} does not exist`);
+      }
+    } finally {
+      console.log(`createNewKeyPair: unlocking - finally`);
+      this._funlock();
     }
-  }
-  ,
+  },
 
   getPrivateKey: async function (username, password) {
     if (!password) {
       throw new Error("Can't get private key without password");
     }
     try {
+      console.log(`getPrivateKey: _initFile`);
       let data = await this._initFile();
       const user = data.users[username];
       if (user) {
@@ -543,6 +623,7 @@ _.extend(Users.prototype, {
         let privateKey = user.encryptedPrivateKey;
         if (salt && privateKey) {
           const pwHash = this._createHashPassword(password, salt);
+          console.log(`getPrivateKey: returning private key with hashed password`);
           return {encryptedPrivateKey: privateKey, passphrase: pwHash, encryptionKeyName: user.encryptionKeyName};
         } else {
           throw new Error(`User ${username} has no decryption key`);
@@ -551,6 +632,7 @@ _.extend(Users.prototype, {
         throw new Error(`Unknown user ${username}`);
       }
     } finally {
+      console.log(`getPrivateKey: unlocking - finally`);
       this._funlock();
     }
   },
@@ -563,6 +645,7 @@ _.extend(Users.prototype, {
       throw new Error("Can't save target private key without password");
     }
     try {
+      console.log(`migratePrivateKey: _initFile`);
       let data = await this._initFile();
       const sourceUser = data.users[sourceUsername];
       if (sourceUser) {
@@ -587,7 +670,9 @@ _.extend(Users.prototype, {
                 targetUser.encryptedPrivateKey = targetPrivateKeyAsPem;
                 targetUser.encryptionPrivateKeySalt = salt;
                 targetUser.encryptionKeyName = sourceUser.encryptionKeyName;
+
                 let savedUser = await this.saveUser(targetUser);
+                console.log(`migratePrivateKey: returning key name ${savedUser.encryptionKeyName}`);
                 return {encryptionKeyName: savedUser.encryptionKeyName};
               } else {
                 throw new Error(`Password for key ${sourceUser.encryptionKeyName} is wrong.`)
@@ -605,6 +690,7 @@ _.extend(Users.prototype, {
         throw new Error(`Unknown source user ${sourceUsername}`);
       }
     } finally {
+      console.log(`migratePrivateKey: unlocking - finally`);
       this._funlock();
     }
   },
@@ -641,38 +727,40 @@ _.extend(Users.prototype, {
       console.log(err);
       throw new Error(err);
     }
-    const self = this;
-    try {
-      let data = await this._initFile();
-      if (data.users[user.name]) {
-        _.extend(data.users[user.name],
-            _.pick(user, 'name', 'email', 'state', 'canRead', 'canWrite', 'isAdmin', 'isAutologin', 'expiredAfter', 'encryptedPrivateKey',
-                'encryptionPrivateKeySalt', 'encryptionKeyName'));
-        return new Promise((resolve, reject) => {
-          jf.writeFile(self.filename, data, {spaces: 2}, function (error) {
-            if (error) {
-              reject(error);
-            } else {
-              let savedUser = data.users[user.name];
-              resolve({
-                name: savedUser.name,
-                email: savedUser.email,
-                state: savedUser.state,
-                canRead: savedUser.canRead,
-                canWrite: savedUser.canWrite,
-                isAdmin: savedUser.isAdmin,
-                isAutologin: savedUser.isAutologin,
-                expiredAfter: savedUser.expiredAfter,
-                encryptionKeyName: savedUser.encryptionKeyName
-              });
-            }
-          });
+    const filename = this.filename;
+    console.log(`saveUser: _initFile (noLock: true)`);
+    let data = await this._initFile(true);  // don't lock file again, because caller of saveUser must/did lock already
+    if (data.users[user.name]) {
+      _.extend(data.users[user.name],
+          _.pick(user, 'name', 'email', 'state', 'canRead', 'canWrite', 'isAdmin', 'isAutologin', 'expiredAfter', 'encryptedPrivateKey',
+              'encryptionPrivateKeySalt', 'encryptionKeyName'));
+      const savedUserToReturn = await new Promise((resolve, reject) => {
+        jf.writeFile(filename, data, {spaces: 2}, function (error) {
+          if (error) {
+            console.log(`saveUser: error writing ${filename}`);
+            reject(error);
+          } else {
+            console.log(`saveUser: ${filename} written`);
+            let savedUser = data.users[user.name];
+            resolve({
+              name: savedUser.name,
+              email: savedUser.email,
+              state: savedUser.state,
+              canRead: savedUser.canRead,
+              canWrite: savedUser.canWrite,
+              isAdmin: savedUser.isAdmin,
+              isAutologin: savedUser.isAutologin,
+              expiredAfter: savedUser.expiredAfter,
+              encryptionKeyName: savedUser.encryptionKeyName
+            });
+          }
         });
-      } else {
-        throw new Error("User does not exist")
-      }
-    } finally {
-      this._funlock();
+        console.log(`saveUser: started writing ${filename}`);
+      });
+      console.log('saveUser: returning saved user data');
+      return savedUserToReturn;
+    } else {
+      throw new Error("User does not exist")
     }
   },
 
@@ -702,7 +790,7 @@ _.extend(Users.prototype, {
         }
       }
       delete data.users[name];
-      return new Promise((resolve, reject) => {
+      await new Promise((resolve, reject) => {
         jf.writeFile(self.filename, data, {spaces: 2}, function (error) {
           if (error) {
             reject(error);
