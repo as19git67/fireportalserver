@@ -13,20 +13,6 @@ let usersDataFileLocked = false;
 
 function _unlockUsersDataFile() {
   usersDataFileLocked = false;
-
-  /*
-    // Unlock file
-    const fn = 'locked_' + usersDataFilename;
-    fs.exists(fn, function (exists) {
-      if (exists) {
-        fs.unlink(fn, (err) => {
-          if (err) {
-            console.error(err);
-          }
-        });
-      }
-    });
-  */
 }
 
 _unlockUsersDataFile();
@@ -45,10 +31,31 @@ let Users = module.exports = function (options) {
 
 _.extend(Users.prototype, {
   initialize: function () {
+    this._locked = false;
+  },
+
+  lock: async function () {
+    const self = this;
+    // wait for any existing _flock based lock has been released
+    await new Promise((resolve, reject) => {
+      self._flock(resolve, reject);
+    });
+    this._locked = true;
+  },
+
+  unlock: function () {
+    this._locked = false;
+    _unlockUsersDataFile();
   },
 
   // the lock function must be a recursive timer
   _flock: function (resolve, reject) {
+    // check if already locked with explicit lock function
+    if (this._locked) {
+      console.log('Skip locking with _flock, because already locked by lock()');
+      resolve();
+      return;
+    }
     const self = this;
     if (usersDataFileLocked) {
       console.log(usersDataFilename + ' is locked. Trying again later...');
@@ -59,28 +66,15 @@ _.extend(Users.prototype, {
       usersDataFileLocked = true;
       resolve();
     }
-
-    /*
-        const self = this;
-        fs.symlink(this.filename, 'locked_' + this.filename, (err) => {
-          if (err) {
-            if (err.code === 'EEXIST') {
-              console.log(usersDataFilename + ' is locked. Try again later...');
-              setTimeout(() => {
-                self._flock(resolve, reject)
-              }, 250);
-            } else {
-              reject(err);
-            }
-          } else {
-            resolve();
-          }
-        });
-    */
   },
 
   _funlock: function () {
-    _unlockUsersDataFile();
+    // ignore unlock if explicitly locked by calling lock()
+    if (!this._locked) {
+      _unlockUsersDataFile();
+    } else {
+      console.log('Skip unlocking with _unlockUsersDataFile, because expecting to unlock with unlock()');
+    }
   },
 
   _initFile: function (noLock) {
@@ -189,10 +183,10 @@ _.extend(Users.prototype, {
       throw new Error('undefined name');
     }
     try {
-      console.log(`getUserByName: _initFile`);
+      // console.log(`getUserByName: _initFile`);
       let data = await this._initFile(noLock);
       const user = data.users[name];
-      console.log(`getUserByName: returning`);
+      // console.log(`getUserByName: returning`);
       if (user) {
         return {
           name: user.name,
@@ -207,7 +201,7 @@ _.extend(Users.prototype, {
       }
     } finally {
       if (!noLock) {
-        console.log(`getUserByName: unlocking - finally`);
+        // console.log(`getUserByName: unlocking - finally`);
         this._funlock();
       }
     }
@@ -240,7 +234,7 @@ _.extend(Users.prototype, {
       throw new Error('undefined name');
     }
     try {
-      console.log(`verifyCode: _initFile, name: ${name}`);
+      // console.log(`verifyCode: _initFile, name: ${name}`);
       let data = await this._initFile();
       const user = data.users[name];
       if (user) {
@@ -264,13 +258,13 @@ _.extend(Users.prototype, {
             resolve(tokenValidates);
           }, 2 * 1000);
         });
-        console.log(`verifyCode: returning ${ok}`);
+        // console.log(`verifyCode: returning ${ok}`);
         return ok;
       } else {
         throw new Error('Unknown user');
       }
     } finally {
-      console.log(`verifyCode: unlocking - finally`);
+      // console.log(`verifyCode: unlocking - finally`);
       this._funlock();
     }
   },
@@ -380,7 +374,7 @@ _.extend(Users.prototype, {
 
   verifyTokenAndGetUser: async function (name, token, newToo) {
     try {
-      console.log(`verifyTokenAndGetUser: _initFile, name: ${name}`);
+      // console.log(`verifyTokenAndGetUser: _initFile, name: ${name}`);
       let data = await this._initFile();
       if (name === 'undefined' || !name) {
         throw {message: 'undefined name', status: 401};
@@ -418,7 +412,7 @@ _.extend(Users.prototype, {
               if (now.isAfter(user.accessTokenExpiresAfter)) {
                 throw {message: 'access token expired', status: 401};
               } else {
-                console.log(`verifyTokenAndGetUser: returning user data`);
+                // console.log(`verifyTokenAndGetUser: returning user data`);
                 return _.pick(user, 'name', 'email', 'state', 'canRead', 'canWrite', 'isAdmin', 'expiredAfter', 'encryptionKeyName');
               }
             } else {
@@ -432,7 +426,7 @@ _.extend(Users.prototype, {
         throw new {message: "user does not exist", status: 401};
       }
     } finally {
-      console.log(`verifyTokenAndGetUser: unlocking - finally`);
+      // console.log(`verifyTokenAndGetUser: unlocking - finally`);
       this._funlock();
     }
   },
@@ -471,7 +465,7 @@ _.extend(Users.prototype, {
 
   getAll: async function () {
     try {
-      console.log(`getAll: _initFile`);
+      // console.log(`getAll: _initFile`);
       let data = await this._initFile();
       if (data) {
         // let notExpiredUsers = _.filter(data.users, function (user) {
@@ -483,7 +477,8 @@ _.extend(Users.prototype, {
         //     return moment().isBefore(ea)
         //   }
         // });
-        console.log(`getAll: returning user data`);
+
+        // console.log(`getAll: returning user data`);
         return _.map(data.users, function (user) {
           return {
             name: user.name,
@@ -502,7 +497,7 @@ _.extend(Users.prototype, {
         return [];
       }
     } finally {
-      console.log(`getAll: unlocking - finally`);
+      // console.log(`getAll: unlocking - finally`);
       this._funlock();
     }
   },

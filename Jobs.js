@@ -11,20 +11,6 @@ let jobsDataFileLocked = false;
 
 function _unlockJobsDataFile() {
   jobsDataFileLocked = false;
-
-  /*
-    // Unlock file
-    const fn = 'locked_' + jobsDataFilename;
-    fs.exists(fn, function (exists) {
-      if (exists) {
-        fs.unlink(fn, (err) => {
-          if (err) {
-            console.error(err);
-          }
-        });
-      }
-    });
-  */
 }
 
 _unlockJobsDataFile();
@@ -37,10 +23,31 @@ let Jobs = module.exports = function () {
 
 _.extend(Jobs.prototype, {
   initialize: function () {
+    this._locked = false;
+  },
+
+  lock: async function () {
+    const self = this;
+    // wait for any existing _flock based lock has been released
+    await new Promise((resolve, reject) => {
+      self._flock(resolve, reject);
+    });
+    this._locked = true;
+  },
+
+  unlock: function () {
+    this._locked = false;
+    _unlockJobsDataFile();
   },
 
   // the lock function must be a recursive timer
   _flock: function (resolve, reject) {
+    // check if already locked with explicit lock function
+    if (this._locked) {
+      console.log('Skip locking with _flock, because already locked by lock()');
+      resolve();
+      return;
+    }
     const self = this;
     if (jobsDataFileLocked) {
       console.log(jobsDataFilename + ' is locked. Trying again later...');
@@ -51,27 +58,15 @@ _.extend(Jobs.prototype, {
       jobsDataFileLocked = true;
       resolve();
     }
-
-    /*
-        fs.symlink(this.filename, 'locked_' + this.filename, (err) => {
-          if (err) {
-            if (err.code === 'EEXIST') {
-              console.log(jobsDataFilename + ' is locked. Try again later...');
-              setTimeout(() => {
-                self._flock(resolve, reject)
-              }, 250);
-            } else {
-              reject(err);
-            }
-          } else {
-            resolve();
-          }
-        });
-    */
   },
 
   _funlock: function () {
-    _unlockJobsDataFile();
+    // ignore unlock if explicitly locked by calling lock()
+    if (!this._locked) {
+      _unlockJobsDataFile();
+    } else {
+      console.log('Skip unlocking with _unlockJobsDataFile, because expecting to unlock with unlock()');
+    }
   },
 
   _initFile: async function () {
@@ -122,7 +117,7 @@ _.extend(Jobs.prototype, {
   //  if job is encrypted and keyObj is given in the arguments, return the decrypted job
   getJobById: async function (id, keyObj) {
     try {
-      console.log(`getJobById: _initFile`);
+      // console.log(`getJobById: _initFile`);
       let data = await this._initFile();
       let job = data.jobs[id];
       if (job) {
@@ -133,13 +128,13 @@ _.extend(Jobs.prototype, {
             'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city', 'object', 'resource', 'plan', 'images',
             'attendees', 'report');
         jobData.id = id;
-        console.log(`getJobById: returning job ${id}`);
+        // console.log(`getJobById: returning job ${id}`);
         return jobData;
       } else {
         throw new Error('Unknown job id');
       }
     } finally {
-      console.log(`getJobById: unlocking - finally`);
+      // console.log(`getJobById: unlocking - finally`);
       this._funlock();
     }
   },
@@ -147,7 +142,7 @@ _.extend(Jobs.prototype, {
   /* return all jobs as array, sorted by start */
   getAll: async function () {
     try {
-      console.log(`getAll: _initFile`);
+      // console.log(`getAll: _initFile`);
       let data = await this._initFile();
       if (data) {
         let jobs = _.map(data.jobs, function (job, key) {
@@ -157,14 +152,14 @@ _.extend(Jobs.prototype, {
           oneJob.id = key;
           return oneJob;
         });
-        console.log(`getAll: returning sorted jobs`);
+        // console.log(`getAll: returning sorted jobs`);
         return _.sortBy(jobs, 'start');
       } else {
-        console.log(`getAll: returning empty job list`);
+        // console.log(`getAll: returning empty job list`);
         return [];
       }
     } finally {
-      console.log(`getAll: unlocking - finally`);
+      // console.log(`getAll: unlocking - finally`);
       this._funlock();
     }
   },
@@ -249,7 +244,7 @@ _.extend(Jobs.prototype, {
     const filename = path.join(__dirname, `jobs.backup.${moment().format('YYYY-MM-DD__HH.mm.ss')}.json`);
     console.log(`Jobs backup started. Backup file is ${filename}`);
     try {
-      console.log(`backupJobs: _initFile`);
+      // console.log(`backupJobs: _initFile`);
       let data = await this._initFile();
       const encryptedJobs = {};
       const encryptedJobsAsArray = _.where(data.jobs, {encrypted: true});
@@ -260,18 +255,17 @@ _.extend(Jobs.prototype, {
       await new Promise((resolve, reject) => {
         jf.writeFile(filename, {jobs: encryptedJobs, sequence: data.sequence}, {spaces: 2})
             .then(() => {
-              console.log(`Backup of encrypted jobs written to ${filename}.`)
+              console.log(`Backup of encrypted jobs written to ${filename}`);
               resolve();
             })
             .catch(reason => {
-              console.log(`EXCEPTION while writing the jobs backup file ${filename}: ${reason}`)
               reject(reason)
             });
       });
     } catch (ex) {
       console.log(`EXCEPTION while backing up jobs: ${ex}`)
     } finally {
-      console.log("backupJobs: unlocking in finally");
+      // console.log("backupJobs: unlocking in finally");
       this._funlock();
     }
   },
