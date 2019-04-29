@@ -55,25 +55,30 @@ app.doInitialConfig().then(function () {
     } catch (e) {
       console.log("EXCEPTION while creating the https server:", e);
     }
-  } else {
-    let httpPort = config.get('httpPort');
-    //const httpPort = normalizePort(process.env.PORT || '3000');
-    if (httpPort) {
-      app.set('httpPort', httpPort);
-      // Create HTTP server
-      let httpServer = http.createServer(app);
-      _startWebSockets(httpServer);
-
-      // Listen on provided port, on all network interfaces.
-      httpServer.listen(httpPort, function () {
-        console.log(app.get('appName') + ' http server listening on port ' + httpPort);
-      });
-      httpServer.on('error', onError);
-      httpServer.on('listening', function () {
-        onListening(httpServer)
-      });
-    }
   }
+
+  // allways start http server (if configured) even if https is already configured
+  // letsencrypt needs http port for renewing certificates
+  let httpPort = config.get('httpPort');
+  //const httpPort = normalizePort(process.env.PORT || '3000');
+  if (httpPort) {
+    app.set('httpPort', httpPort);
+    // Create HTTP server
+    let httpServer = http.createServer(app);
+    if (!httpsPort) {
+      // start websockets only if not already started for https
+      _startWebSockets(httpServer);
+    }
+    // Listen on provided port, on all network interfaces.
+    httpServer.listen(httpPort, function () {
+      console.log(app.get('appName') + ' http server listening on port ' + httpPort);
+    });
+    httpServer.on('error', onError);
+    httpServer.on('listening', function () {
+      onListening(httpServer)
+    });
+  }
+
 }).catch(reason => {
   console.log(reason);
   console.log("Not starting web-server, because initial configuration failed.");
