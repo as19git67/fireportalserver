@@ -194,58 +194,63 @@ module.exports = function (app) {
     let newJobData;
     let data = req.body;
     let j = new Jobs();
-    const username = req.user.name;
-    let originalJob = await j.getJobById(jobId);
-    if (data.encrypted !== undefined) {
-      if (data.encrypted && !originalJob.encrypted) {
-        // encrypt job data
-        console.log(`Encrypting job ${jobId} by user ${username}...`);
-        let encryptedJob = await j.encryptJob(originalJob);
-        console.log(`Encrypted job ${jobId} by user ${username}.`);
-        req.app.get('backupJobs')(j); // backup jobs
-        return {updatedJob: encryptedJob, decrypted: false};
-      } else {
-        if (!data.encrypted && originalJob.encrypted) {
-          // decrypt job data
-          const u = new Users();
-          const keyObj = await u.getPrivateKey(username, data.passphrase);
-          console.log(`Decrypting job ${jobId} by user ${username}...`);
-          let decryptedJob = await j.decryptJob(originalJob, keyObj);
-          console.log(`Decrypted job ${jobId} by user ${username}.`);
+    try {
+      j.lock();
+      const username = req.user.name;
+      let originalJob = await j.getJobById(jobId);
+      if (data.encrypted !== undefined) {
+        if (data.encrypted && !originalJob.encrypted) {
+          // encrypt job data
+          console.log(`Encrypting job ${jobId} by user ${username}...`);
+          let encryptedJob = await j.encryptJob(originalJob);
+          console.log(`Encrypted job ${jobId} by user ${username}.`);
           req.app.get('backupJobs')(j); // backup jobs
-          return {updatedJob: decryptedJob, decrypted: true};
+          return {updatedJob: encryptedJob, decrypted: false};
         } else {
-          console.log(`Warning: updateJob called with data.encrypted=${data.encrypted}, but job has already this state`);
-          return {updatedJob: originalJob, decrypted: false};
+          if (!data.encrypted && originalJob.encrypted) {
+            // decrypt job data
+            const u = new Users();
+            const keyObj = await u.getPrivateKey(username, data.passphrase);
+            console.log(`Decrypting job ${jobId} by user ${username}...`);
+            let decryptedJob = await j.decryptJob(originalJob, keyObj);
+            console.log(`Decrypted job ${jobId} by user ${username}.`);
+            req.app.get('backupJobs')(j); // backup jobs
+            return {updatedJob: decryptedJob, decrypted: true};
+          } else {
+            console.log(`Warning: updateJob called with data.encrypted=${data.encrypted}, but job has already this state`);
+            return {updatedJob: originalJob, decrypted: false};
+          }
         }
-      }
-    } else {
-      if (originalJob.encrypted) {
-        throw new Error("can't update encrypted job");
-      }
+      } else {
+        if (originalJob.encrypted) {
+          throw new Error("can't update encrypted job");
+        }
 
-      const levelOneKeysOfPossibleChanges = ['start', 'end', 'title', 'number', 'encrypted'];
-      const attendeesKeysOfPossibleChanges = ['id', 'lastname', 'firstname'];
-      const reportKeysOfPossibleChanges = [
-        'incident', 'location', 'director', 'text', 'material', 'rescued', 'recovered', 'others', 'duration', 'staffcount',
-        'writer'
-      ];
-      newJobData = _.pick(data, levelOneKeysOfPossibleChanges);
-      if (data.attendees) {
-        newJobData.attendees = _.map(data.attendees, function (attendee) {
-          return _.pick(attendee, attendeesKeysOfPossibleChanges);
-        });
-      }
-      if (data.report) {
-        if (!originalJob.report) {
-          originalJob.report = {};
+        const levelOneKeysOfPossibleChanges = ['start', 'end', 'title', 'number', 'encrypted'];
+        const attendeesKeysOfPossibleChanges = ['id', 'lastname', 'firstname'];
+        const reportKeysOfPossibleChanges = [
+          'incident', 'location', 'director', 'text', 'material', 'rescued', 'recovered', 'others', 'duration', 'staffcount',
+          'writer'
+        ];
+        newJobData = _.pick(data, levelOneKeysOfPossibleChanges);
+        if (data.attendees) {
+          newJobData.attendees = _.map(data.attendees, function (attendee) {
+            return _.pick(attendee, attendeesKeysOfPossibleChanges);
+          });
         }
-        newJobData.report = _.extend(originalJob.report, _.pick(req.body.report, reportKeysOfPossibleChanges));
+        if (data.report) {
+          if (!originalJob.report) {
+            originalJob.report = {};
+          }
+          newJobData.report = _.extend(originalJob.report, _.pick(req.body.report, reportKeysOfPossibleChanges));
+        }
       }
+      let jobToSave = _.extend(originalJob, newJobData);
+      let updatedJob = await j.saveJob(jobToSave);
+      return {updatedJob: updatedJob, decrypted: false};
+    } finally {
+      j.unlock();
     }
-    let jobToSave = _.extend(originalJob, newJobData);
-    let updatedJob = await j.saveJob(jobToSave);
-    return {updatedJob: updatedJob, decrypted: false};
   }
 
   /* update a job */
@@ -488,38 +493,64 @@ module.exports = function (app) {
     if (_.isString(data['email']) && _.isString(data['name'])) {
       // console.log(JSON.stringify(data, null, 2));
       let u = new Users();
-      u.getUserByName(data.name).then(existingUser => {
-        if (existingUser === undefined || (existingUser && existingUser.state === 'new')) {
-          u.createUser(data.name, data.email).then(user => {
-            // console.log("New user: " + JSON.stringify(user, null, 2));
-
-            // allow sending email again earliest in 1 minute
-            sendNextEmailNotBefore = moment();
-            sendNextEmailNotBefore.add(1, 'minutes');
-
-            _sendVerificationEmail(data.email,
-                `${req.headers.origin}/#/setupauth3?name=${data.name}&email=${data.email}&token=${user.accessToken}`)
-                .then(() => {
-                  res.status(200).end();
-                })
-                .catch(reason => {
-                  console.log(`ERROR sending verification email: ${reason}`);
-                  res.status(500).end();
-                });
-          }).catch(reason => {
-            console.log(`ERROR creating user with name ${data.name} and email ${data.email}: ${reason}`);
-            res.status(500).end();
-          });
-        } else {
-          if (existingUser) {
-            console.log(`ERROR: user with name ${data.name} already exists with state ${existingUser.state} `);
-            res.status(429).send('User already exists');
+      try {
+        u.lock();
+        new Promise(async (resolve, reject) => {
+          let existingUser;
+          try {
+            existingUser = await u.getUserByName(data.name);
+          } catch (ex) {
+            reject({message: `ERROR while getting user with name ${data.name}: ${ex.message}`, status: 500, exception: ex});
+            return;
           }
-        }
-      }).catch(reason => {
-        console.log(`ERROR while getting user with name ${data.name}: ${reason}`);
-        res.status(500).end();
-      });
+          if (existingUser === undefined || (existingUser && existingUser.state === 'new')) {
+            try {
+              const user = await u.createUser(data.name, data.email);
+              // console.log("New user: " + JSON.stringify(user, null, 2));
+
+              // allow sending email again earliest in 1 minute
+              sendNextEmailNotBefore = moment();
+              sendNextEmailNotBefore.add(1, 'minutes');
+            } catch (ex) {
+              reject({message: `ERROR creating user with name ${data.name} and email ${data.email}: ${ex.message}`, status: 500, exception: ex});
+              return;
+            }
+            try {
+              await _sendVerificationEmail(data.email, `${req.headers.origin}/#/setupauth3?name=${data.name}&email=${data.email}&token=${user.accessToken}`);
+
+              resolve();
+
+            } catch (ex) {
+              reject({message: `ERROR sending verification email: ${ex.message}`, status: 500, exception: ex});
+            }
+          } else {
+            if (existingUser) {
+              reject({
+                message: `ERROR: user with name ${data.name} already exists with state ${existingUser.state}`,
+                statusText: `User already exists`,
+                status: 429
+              });
+            }
+          }
+        }).then(() => {
+          res.status(200).end();
+        }).catch(reason => {
+          if (reason.exception) {
+            console.error(reason.exception);
+          }
+          if (reason.message) {
+            console.log(reason.message);
+          }
+          res.status(reason.status ? reason.status : 500);
+          if (reason.statusText) {
+            res.send(reason.statusText);
+          } else {
+            res.end();
+          }
+        });
+      } finally {
+        u.unlock();
+      }
     } else {
       res.status(400).end();
     }
@@ -533,40 +564,64 @@ module.exports = function (app) {
 
     if (_.isString(data['code']) && _.isString(data['name'])) {
       let u = new Users({tokenLifetimeInMinutes: config.get('tokenLifetimeInMinutes')});
-      u.getUserByName(data.name).then(existingUser => {
-        if (existingUser) {
-          u.verifyCodeAndCreateAccessTokenForUser(data.name, data.code)
-              .then(tokenData => {
-                if (tokenData) {
-                  if (existingUser.state === 'new') {
-                    existingUser.state = 'provisioned';
-                    existingUser.expiredAfter = moment().add(1, 'month');
+      try {
+        u.lock();
+        new Promise(async (resolve, reject) => {
 
-                    u.saveUser(existingUser)
-                        .then(() => {
-                          res.json(tokenData);
-                        })
-                        .catch(reason => {
-                          console.log(`ERROR while saving user with name ${existingUser.name}: ${reason}`);
-                          res.status(500).end();
-                        });
-                  } else {
-                    res.json(tokenData);
-                  }
-                } else {
-                  res.status(401).end();
+          let existingUser;
+          try {
+            existingUser = await u.getUserByName(data.name);
+          } catch (ex) {
+            reject({message: `ERROR while getting user with name ${data.name}: ${ex.message}`, status: 500, exception: ex});
+            return;
+          }
+          if (existingUser) {
+            let tokenData;
+            try {
+              tokenData = await u.verifyCodeAndCreateAccessTokenForUser(data.name, data.code);
+            } catch (ex) {
+              reject({status: 401, exception: ex});
+              return;
+            }
+            if (tokenData) {
+              if (existingUser.state === 'new') {
+                existingUser.state = 'provisioned';
+                existingUser.expiredAfter = moment().add(1, 'month');
+                try {
+                  await u.saveUser(existingUser);
+                  resolve(tokenData);
+                } catch (ex) {
+                  reject({message: `ERROR while saving user with name ${existingUser.name}: ${ex.message}`, status: 500, exception: ex});
                 }
-              })
-              .catch(reason => {
-                res.status(401).end();
-              });
-        } else {
-          res.status(404).send('User unknown');
-        }
-      }).catch(reason => {
-        console.log(`ERROR while getting user with name ${data.name}: ${reason}`);
-        res.status(500).end();
-      });
+              } else {
+                resolve(tokenData);
+              }
+            } else {
+              reject({status: 401});
+            }
+          } else {
+            reject({status: 404, statusText: 'User unknown'});
+          }
+
+        }).then((tokenData) => {
+          res.json(tokenData);
+        }).catch(reason => {
+          if (reason.exception) {
+            console.error(reason.exception);
+          }
+          if (reason.message) {
+            console.log(reason.message);
+          }
+          res.status(reason.status ? reason.status : 500);
+          if (reason.statusText) {
+            res.send(reason.statusText);
+          } else {
+            res.end();
+          }
+        });
+      } finally {
+        u.unlock();
+      }
     } else {
       res.status(400).end();
     }
