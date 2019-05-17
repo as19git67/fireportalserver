@@ -314,22 +314,30 @@ _.extend(Jobs.prototype, {
     }
   },
 
-  deleteJob: async function (id) {
-    if (id === undefined) {
+  deleteJob: async function (jobId) {
+    if (jobId === undefined) {
       const err = "ERROR: attempt to delete job with undefined id";
+      console.log(err);
+      throw new Error(err);
+    }
+    if (_.isString(jobId)) {
+      jobId = parseInt(jobId);
+    }
+    if (isNaN(jobId)) {
+      const err = "ERROR: attempt to delete job with id that is not a number";
       console.log(err);
       throw new Error(err);
     }
     try {
       console.log(`deleteJob: _initFile`);
       let data = await this._initFile();
-      delete data.jobs[id];
+      delete data.jobs[jobId];
       const filename = this.filename;
       const id = await new Promise((resolve, reject) => {
         jf.writeFile(filename, data, {spaces: 2})
             .then(() => {
               console.log(`deleteJob: ${filename} written`);
-              resolve(id);
+              resolve(jobId);
             })
             .catch(reason => {
               console.log(`deleteJob: error writing ${filename}`);

@@ -292,23 +292,80 @@ module.exports = function (app) {
   });
 
   /* delete a job */
-  // perms needed: isAdmin
-  router.delete('/jobs/:id', CORS(corsOptions), authenticate, Right('admin'), function (req, res, next) {
+  // perms needed: isAdmin or isWrite if manually created
+  router.delete('/jobs/:id', CORS(corsOptions), authenticate, Right('write'), function (req, res, next) {
+    const reportAttributesExceptions = ['director', 'writer'];
     if (isNaN(req.params.id)) {
       res.status(403);
       res.end();
     } else {
+      const jobId = req.params.id;
       let j = new Jobs();
-      j.deleteJob(req.params.id)
-          .then(() => {
-            req.app.get('backupJobs')(j); // backup jobs
-            res.end();
+      j.getJobById(jobId)
+          .then((job) => {
+            let accessGranted = false;
+            // check if job data was set and if it has, then require admin right for deletion
+            let reportEdited = !!_.find(_.keys(job.report), key => {
+              if (_.contains(reportAttributesExceptions, key)) {
+                return false; // don't check this attribute for any value
+              }
+              const attribute = job.report[key];
+              if (_.isString(attribute)) {
+                const num = parseFloat(attribute);
+                if (isNaN(num)) {
+                  return attribute.trim();
+                } else {
+                  return num;  // evaluates to false if 0
+                }
+              } else {
+                return attribute;
+              }
+            });
+            if (job.number || job.keyword || job.catchword || _.values(job.attendees).length || reportEdited) {
+              console.log(`job's number, keyword, catchword, etc are. not all empty. Admin rights required for deletion`);
+              let accessRights = req.user.accessRights;
+              if (accessRights) {
+                console.log(`Access rights of user ${req.user.name}: ${accessRights}`);
+                if (_.contains(accessRights, "read")) {
+                  let accessRights = req.user.accessRights;
+                  if (accessRights) {
+                    console.log(`Access rights of user ${req.user.name}: ${accessRights}`);
+                    if (_.contains(accessRights, "admin")) {
+                      console.log(`User ${req.user.name} has right 'admin' -> user can delete job`);
+                      accessGranted = true;
+                    }
+                  }
+                }
+              } else {
+                console.log("Error: user object contains no accessRights");
+                res.status(500).end();
+              }
+            } else {
+              accessGranted = true;
+            }
+
+            if (accessGranted) {
+              j.deleteJob(jobId)
+                  .then(() => {
+                    req.app.get('backupJobs')(j); // backup jobs
+                    res.end();
+                  })
+                  .catch(reason => {
+                    console.log(`ERROR deleting job with id: ${jobId}: ${reason}`);
+                    res.status(500);
+                    res.send('Error deleting job data');
+                  });
+            } else {
+              console.log(`User ${req.user.name} does not have required right to delete the job`);
+              res.status(403).end();
+            }
           })
           .catch(reason => {
-            console.log(`ERROR deleting job with id: ${req.params.id}: ${reason}`);
+            console.log(`ERROR deleting job with id: ${jobId}: ${reason}`);
             res.status(500);
-            res.send('Error deleting job data');
+            res.send('Error deleting job');
           });
+
     }
   });
 
@@ -380,78 +437,102 @@ module.exports = function (app) {
   }
 
   /* add a new job */
-  // perms needed: bearerToken for full access (passed by firealarm)
-  router.post('/jobs', CORS(corsOptions), authenticate, Right('admin'), function (req, res, next) {
-    let form = new formidable.IncomingForm();
-
-    form.parse(req, function (err, fields, files) {
-
-      let images = {};
-      let file = files.alarmfax;
-      if (file) {
-        console.log("Received file: " + file.name + ' (' + file.type + ')');
-
-        if (file.type === 'image/png') {
-          let data = fs.readFileSync(file.path);
-
-          let debugSavePrintfiles = config.get('debugSavePrintfiles');
-          if (debugSavePrintfiles) {
-            if (fs.existsSync(debugSavePrintfiles)) {
-              let fullFilepath = path.join(debugSavePrintfiles, file.name);
-              if (!path.extname(fullFilepath)) {
-                switch (file.type) {
-                case 'image/png':
-                  fullFilepath = fullFilepath + '.png';
-                  break;
-                case 'text/plain':
-                  fullFilepath = fullFilepath + '.txt';
-                  break;
-                }
-              }
-              fs.writeFile(fullFilepath, data, function (err) {
-                if (err) {
-                  console.log("Error writing fullFilepath: ", err);
-                } else {
-                  console.log(fullFilepath + " stored for debugging purposes");
-                }
-              });
-            } else {
-              console.log("WARNING: " + debugSavePrintfiles + " does not exist. Files to print are not stored for debugging purposes.");
-            }
-          }
-
-          images.fax = "data:image/png;base64, " + data.toString('base64');
-        } else {
-          console.log('Skip ' + file.name + ' because of unsupported mime type (' + file.type + ')');
-        }
-      }
-      let job = {
+  // perms needed: write access or  bearerToken for write access (passed by firealarm)
+  router.post('/jobs', CORS(corsOptions), authenticate, Right('write'), function (req, res, next) {
+    let job;
+    if (req.is('json')) {
+      job = {
         start: moment(),
         end: undefined,
-        title: "Einsatz",
-        number: fields.number,
-        keyword: fields.keyword,
-        catchword: fields.catchword,
-        longitude: fields.longitude,
-        latitude: fields.latitude,
-        street: fields.street,
-        streetnumber: fields.streetnumber,
-        city: fields.city,
-        object: fields.object,
-        resource: fields.resource,
-        plan: fields.plan,
-        // attendees: fields.attendees,
-        report: {
-          incident: (fields.keyword ? fields.keyword : '') + (fields.catchword ? ', ' + fields.catchword : ''),
-          location: _makeAddress(fields),
-          duration: 0,
-          rescued: 0,
-          recovered: 0,
-          material: _makeMaterial(fields),
-          others: _makeOthers(fields)
-        },
-        images: images
+        title: req.body.title ? req.body.title : "Einsatz (manuell angelegt)",
+        number: req.body.number,
+        keyword: req.body.keyword,
+        catchword: req.body.catchword,
+        longitude: req.body.longitude,
+        latitude: req.body.latitude,
+        street: req.body.street,
+        streetnumber: req.body.streetnumber,
+        city: req.body.city,
+        object: req.body.object,
+        resource: req.body.resource,
+        plan: req.body.plan,
+        report:
+            {}
       };
+    } else {
+      let form = new formidable.IncomingForm();
+
+      form.parse(req, function (err, fields, files) {
+
+        let images = {};
+        let file = files.alarmfax;
+        if (file) {
+          console.log("Received file: " + file.name + ' (' + file.type + ')');
+
+          if (file.type === 'image/png') {
+            let data = fs.readFileSync(file.path);
+
+            let debugSavePrintfiles = config.get('debugSavePrintfiles');
+            if (debugSavePrintfiles) {
+              if (fs.existsSync(debugSavePrintfiles)) {
+                let fullFilepath = path.join(debugSavePrintfiles, file.name);
+                if (!path.extname(fullFilepath)) {
+                  switch (file.type) {
+                  case 'image/png':
+                    fullFilepath = fullFilepath + '.png';
+                    break;
+                  case 'text/plain':
+                    fullFilepath = fullFilepath + '.txt';
+                    break;
+                  }
+                }
+                fs.writeFile(fullFilepath, data, function (err) {
+                  if (err) {
+                    console.log("Error writing fullFilepath: ", err);
+                  } else {
+                    console.log(fullFilepath + " stored for debugging purposes");
+                  }
+                });
+              } else {
+                console.log("WARNING: " + debugSavePrintfiles + " does not exist. Files to print are not stored for debugging purposes.");
+              }
+            }
+
+            images.fax = "data:image/png;base64, " + data.toString('base64');
+          } else {
+            console.log('Skip ' + file.name + ' because of unsupported mime type (' + file.type + ')');
+          }
+        }
+        job = {
+          start: moment(),
+          end: undefined,
+          title: fields.title ? fields.title : "Einsatz",
+          number: fields.number,
+          keyword: fields.keyword,
+          catchword: fields.catchword,
+          longitude: fields.longitude,
+          latitude: fields.latitude,
+          street: fields.street,
+          streetnumber: fields.streetnumber,
+          city: fields.city,
+          object: fields.object,
+          resource: fields.resource,
+          plan: fields.plan,
+          // attendees: fields.attendees,
+          report: {
+            incident: (fields.keyword ? fields.keyword : '') + (fields.catchword ? ', ' + fields.catchword : ''),
+            location: _makeAddress(fields),
+            duration: 0,
+            rescued: 0,
+            recovered: 0,
+            material: _makeMaterial(fields),
+            others: _makeOthers(fields)
+          },
+          images: images
+        };
+      });
+    }
+    if (job) {
       let j = new Jobs();
       j.addJob(job).then(addedJob => {
         req.app.get('backupJobs')(j); // backup jobs
@@ -472,7 +553,7 @@ module.exports = function (app) {
         res.status(500);
         res.send('Error while adding new job data');
       });
-    });
+    }
   });
 
   router.options('/verifyemail', CORS()); // enable pre-flight
