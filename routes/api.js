@@ -150,7 +150,7 @@ module.exports = function (app) {
                     new Jobs().getJobById(jobId, keyObj)
                         .then(decryptedJob => {
                           if (decryptedJob && !complete) {
-                            delete decryptedJob.images
+                            delete decryptedJob.images;
                           }
                           res.json(decryptedJob);
                         })
@@ -178,7 +178,7 @@ module.exports = function (app) {
         new Jobs().getJobById(jobId)
             .then(job => {
               if (job && !complete) {
-                delete job.images
+                delete job.images;
               }
               res.json(job);
             })
@@ -398,12 +398,12 @@ module.exports = function (app) {
   function _parseJsonArray(value) {
     if (_.isString(value) && value.charAt(0) === '[') {
       try {
-        return JSON.parse(value)
+        return JSON.parse(value);
       } catch (ex) {
-        console.log(`WARNING: JSON parse failed with ${value}`)
+        console.log(`WARNING: JSON parse failed with ${value}`);
       }
     } else {
-      return value
+      return value;
     }
 
   }
@@ -412,7 +412,7 @@ module.exports = function (app) {
     if (data.resource) {
       let value = _parseJsonArray(data.resource);
       if (_.isArray(value)) {
-        let resources = _.filter(value, function (o) { return o.indexOf('erching') > 1 });
+        let resources = _.filter(value, function (o) { return o.indexOf('erching') > 1; });
         return resources.join(', ');
       } else {
         return value;
@@ -426,7 +426,7 @@ module.exports = function (app) {
     if (data.resource) {
       let value = _parseJsonArray(data.resource);
       if (_.isArray(value)) {
-        let others = _.reject(value, function (o) { return o.indexOf('erching') > 0 });
+        let others = _.reject(value, function (o) { return o.indexOf('erching') > 0; });
         return others.join(', ');
       } else {
         return '';
@@ -439,7 +439,34 @@ module.exports = function (app) {
   /* add a new job */
   // perms needed: write access or  bearerToken for write access (passed by firealarm)
   router.post('/jobs', CORS(corsOptions), authenticate, Right('write'), function (req, res, next) {
+
     let job;
+
+    function handlePostedJob() {
+      if (job) {
+        let j = new Jobs();
+        j.addJob(job).then(addedJob => {
+          req.app.get('backupJobs')(j); // backup jobs
+          res.json({id: addedJob.id});
+
+          // notify all clients
+          const wss = req.app.get('wss');
+          if (wss) {
+            wss.clients.forEach(function each(client) {
+              if (client.readyState === WebSocket.OPEN) {
+                console.log(`Sending push to client ${client}`);
+                client.send('newJob');
+              }
+            });
+          }
+        }).catch(reason => {
+          console.log("ERROR adding new job: ", reason);
+          res.status(500);
+          res.send('Error while adding new job data');
+        });
+      }
+    }
+
     if (req.is('json')) {
       job = {
         start: moment(),
@@ -459,6 +486,7 @@ module.exports = function (app) {
         report:
             {}
       };
+      handlePostedJob();
     } else {
       let form = new formidable.IncomingForm();
 
@@ -530,30 +558,12 @@ module.exports = function (app) {
           },
           images: images
         };
-      });
-    }
-    if (job) {
-      let j = new Jobs();
-      j.addJob(job).then(addedJob => {
-        req.app.get('backupJobs')(j); // backup jobs
-        res.json({id: addedJob.id});
 
-        // notify all clients
-        const wss = req.app.get('wss');
-        if (wss) {
-          wss.clients.forEach(function each(client) {
-            if (client.readyState === WebSocket.OPEN) {
-              console.log(`Sending push to client ${client}`);
-              client.send('newJob');
-            }
-          });
-        }
-      }).catch(reason => {
-        console.log("ERROR adding new job: ", reason);
-        res.status(500);
-        res.send('Error while adding new job data');
+        handlePostedJob();
+
       });
     }
+
   });
 
   router.options('/verifyemail', CORS()); // enable pre-flight
@@ -807,7 +817,7 @@ module.exports = function (app) {
         .catch(reason => {
           res.status(500).end();
           console.log(`Exception while verifying password: ${reason}`);
-        })
+        });
   });
 
   /* add a new encryption key, which replaces any current encryption key - this can be done only, if no RSA keypair has been generated already*/
@@ -1039,7 +1049,7 @@ module.exports = function (app) {
         .catch(reason => {
           res.status(500).end();
           console.log(`Exception while sharing private decryption key: ${reason}`);
-        })
+        });
   });
 
   /* deletes the private decryption key for another user */
@@ -1062,7 +1072,7 @@ module.exports = function (app) {
         .catch(reason => {
           res.status(500).end();
           console.log('Exception while deleting private decryption key.', reason);
-        })
+        });
   });
 
   function _pushUpdate(req, message) {
