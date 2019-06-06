@@ -217,6 +217,7 @@ _.extend(Jobs.prototype, {
           report: report
         };
       }
+      job.id = id;
       data.jobs[id] = job;
 
       const filename = this.filename;

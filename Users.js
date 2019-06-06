@@ -22,7 +22,7 @@ let Users = module.exports = function (options) {
   this.tokenLifetimeInMinutes = options.tokenLifetimeInMinutes ? options.tokenLifetimeInMinutes : 6;
   // minimum token lifetime is 6 minutes
   if (this.tokenLifetimeInMinutes < 6) {
-    this.tokenLifetimeInMinutes = 6
+    this.tokenLifetimeInMinutes = 6;
   }
 
   this.filename = usersDataFilename;
@@ -60,7 +60,7 @@ _.extend(Users.prototype, {
     if (usersDataFileLocked) {
       console.log(usersDataFilename + ' is locked. Trying again later...');
       setTimeout(() => {
-        self._flock(resolve, reject)
+        self._flock(resolve, reject);
       }, 250);
     } else {
       usersDataFileLocked = true;
@@ -105,7 +105,7 @@ _.extend(Users.prototype, {
                   if (err) {
                     reject(err);
                   } else {
-                    resolve(data)
+                    resolve(data);
                   }
                 });
               })
@@ -128,7 +128,7 @@ _.extend(Users.prototype, {
       let existingUser = await this.getUserByName(username, true);
       if (existingUser) {
         if (existingUser.state === "new") {
-          await self.deleteUser(existingUser.name, true)
+          await self.deleteUser(existingUser.name, true);
         } else {
           throw new Error("Can't create user " + username + ", because it already exists");
         }
@@ -289,9 +289,9 @@ _.extend(Users.prototype, {
           };
           if (user.isAutologin) {
             tokenData.accessTokenExpiresAfter = moment("9999-12-31");
-            tokenData.isAutologin = true
+            tokenData.isAutologin = true;
           } else {
-            tokenData.accessTokenExpiresAfter = moment().add(this.tokenLifetimeInMinutes, 'minutes')
+            tokenData.accessTokenExpiresAfter = moment().add(this.tokenLifetimeInMinutes, 'minutes');
           }
           _.extend(user, {accessToken: tokenData.accessToken, accessTokenExpiresAfter: tokenData.accessTokenExpiresAfter});
           let tokenDataToReturn = await new Promise((resolve, reject) => {
@@ -320,13 +320,57 @@ _.extend(Users.prototype, {
     }
   },
 
+  createAccessTokenForUser: async function (name) {
+    if (name === 'undefined' || !name) {
+      throw new Error('undefined name');
+    }
+
+    const tokenValue = hat().toString('base64');
+    const self = this;
+    const filename = this.filename;
+    try {
+      let data = await this._initFile();
+      let user = data.users[name];
+      if (user) {
+        let tokenData = {
+          accessToken: tokenValue
+        };
+        if (user.isAutologin) {
+          tokenData.accessTokenExpiresAfter = moment("9999-12-31");
+          tokenData.isAutologin = true;
+        } else {
+          tokenData.accessTokenExpiresAfter = moment().add(this.tokenLifetimeInMinutes, 'minutes');
+        }
+        _.extend(user, {accessToken: tokenData.accessToken, accessTokenExpiresAfter: tokenData.accessTokenExpiresAfter});
+        let tokenDataToReturn = await new Promise((resolve, reject) => {
+          jf.writeFile(filename, data, {spaces: 2}, function (error) {
+            if (error) {
+              console.log(`createAccessTokenForUser: error writing ${filename}`);
+              reject(error);
+            } else {
+              tokenData.accessRights = self.getAccessRights(user);
+              tokenData.encryptionKeyName = user.encryptionKeyName;
+              tokenData.username = name;
+              resolve(tokenData);
+            }
+          });
+        });
+        return tokenDataToReturn;
+      } else {
+        throw new Error("User does not exist");
+      }
+    } finally {
+      this._funlock();
+    }
+
+  },
+
   refreshToken: async function (name) {
     if (name === 'undefined' || !name) {
       throw {message: 'undefined name', status: 401};
     }
     const filename = this.filename;
     try {
-      console.log(`refreshToken: _initFile`);
       let data = await this._initFile();
       let user = data.users[name];
       if (user) {
@@ -342,8 +386,9 @@ _.extend(Users.prototype, {
             if (user.isAutologin) {
               tokenData.refreshAccessTokenExpiresAfter = moment("9999-12-31");
             } else {
-              tokenData.refreshAccessTokenExpiresAfter = moment().add(this.tokenLifetimeInMinutes, 'minutes')
+              tokenData.refreshAccessTokenExpiresAfter = moment().add(this.tokenLifetimeInMinutes, 'minutes');
             }
+            console.log(`Refreshed access token for ${name}. Valid until ${tokenData.refreshAccessTokenExpiresAfter.format()}`);
             _.extend(user, {refreshAccessToken: tokenData.refreshAccessToken, refreshAccessTokenExpiresAfter: tokenData.refreshAccessTokenExpiresAfter});
             const tokenDataToReturn = await new Promise((resolve, reject) => {
               jf.writeFile(filename, data, {spaces: 2}, function (error) {
@@ -351,13 +396,10 @@ _.extend(Users.prototype, {
                   console.log(`refreshToken: error writing ${filename}`);
                   reject(error);
                 } else {
-                  console.log(`refreshToken: ${filename} written`);
                   resolve(tokenData);
                 }
               });
-              console.log(`refreshToken: started writing ${filename}`);
             });
-            console.log(`refreshToken: returning token`);
             return tokenDataToReturn;
           } else {
             throw {message: 'user is not provisioned', status: 401};
@@ -367,7 +409,6 @@ _.extend(Users.prototype, {
         throw new {message: "user does not exist", status: 401};
       }
     } finally {
-      console.log(`refreshToken: unlocking - finally`);
       this._funlock();
     }
   },
@@ -656,7 +697,7 @@ _.extend(Users.prototype, {
         const targetUser = data.users[targetUsername];
         if (targetUser) {
           if (targetUser.encryptionKeyName) {
-            throw new Error(`User ${username} already has a decryption key (${targetUser.encryptionKeyName}) set`)
+            throw new Error(`User ${username} already has a decryption key (${targetUser.encryptionKeyName}) set`);
           }
           if (sourceUser.encryptionKeyName === sourceKeyname) {
             let salt = sourceUser.encryptionPrivateKeySalt;
@@ -679,7 +720,7 @@ _.extend(Users.prototype, {
                 console.log(`migratePrivateKey: returning key name ${savedUser.encryptionKeyName}`);
                 return {encryptionKeyName: savedUser.encryptionKeyName};
               } else {
-                throw new Error(`Password for key ${sourceUser.encryptionKeyName} is wrong.`)
+                throw new Error(`Password for key ${sourceUser.encryptionKeyName} is wrong.`);
               }
             } else {
               throw new Error(`User ${sourceUsername} has no decryption key`);
@@ -766,7 +807,7 @@ _.extend(Users.prototype, {
       console.log('saveUser: returning saved user data');
       return savedUserToReturn;
     } else {
-      throw new Error("User does not exist")
+      throw new Error("User does not exist");
     }
   },
 

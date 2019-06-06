@@ -349,6 +349,7 @@ module.exports = function (app) {
                   .then(() => {
                     req.app.get('backupJobs')(j); // backup jobs
                     res.end();
+                    _pushUpdate(req, `deletedJob:${jobId}`);
                   })
                   .catch(reason => {
                     console.log(`ERROR deleting job with id: ${jobId}: ${reason}`);
@@ -454,8 +455,8 @@ module.exports = function (app) {
           if (wss) {
             wss.clients.forEach(function each(client) {
               if (client.readyState === WebSocket.OPEN) {
-                console.log(`Sending push to client ${client}`);
-                client.send('newJob');
+                console.log(`Sending push to client ${client._socket.remoteAddress}`);
+                client.send(`newJob:${addedJob.id}`);
               }
             });
           }
@@ -675,6 +676,7 @@ module.exports = function (app) {
               return;
             }
             if (tokenData) {
+              tokenData.name = existingUser.name;
               if (existingUser.state === 'new') {
                 existingUser.state = 'provisioned';
                 existingUser.expiredAfter = moment().add(1, 'month');
@@ -714,7 +716,29 @@ module.exports = function (app) {
         u.unlock();
       }
     } else {
+      console.log('data or code missing in request body');
       res.status(400).end();
+    }
+  });
+
+  router.options('/authwithtoken', CORS(corsOptions)); // enable pre-flight
+
+  // perms needed: - , must be authenticated (usually with bearer token from settings.json)
+  router.post('/authwithtoken', CORS(corsOptions), authenticate, function (req, res, next) {
+    if (req.user) {
+      let u = new Users({tokenLifetimeInMinutes: config.get('tokenLifetimeInMinutes')});
+      const name = req.user.name;
+      console.log(`authwithtoken for user ${name}`);
+      u.createAccessTokenForUser(name)
+          .then(result => {
+            res.json(result);
+          })
+          .catch(reason => {
+            console.error('creating access token failed: ', reason);
+            res.status(reason.status ? reason.status : 500).end();
+          });
+    } else {
+      res.status(403).send('Not authenticated');
     }
   });
 
