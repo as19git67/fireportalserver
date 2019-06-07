@@ -32,7 +32,7 @@ _.extend(Staff.prototype, {
             if (err) {
               reject(err);
             } else {
-              resolve(data)
+              resolve(data);
             }
           });
         }
@@ -45,7 +45,7 @@ _.extend(Staff.prototype, {
     if (data && data.staff && _.isArray(data.staff)) {
 
       let allOfGroup = _.where(data.staff, {groupId: groupId});
-      let sortedStaff = _.sortBy(allOfGroup, function (person) { return person.lastname + person.firstname });
+      let sortedStaff = _.sortBy(allOfGroup, function (person) { return person.lastname + person.firstname; });
 
       return _.map(sortedStaff, function (person) {
         return {

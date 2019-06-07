@@ -52,7 +52,7 @@ _.extend(Jobs.prototype, {
     if (jobsDataFileLocked) {
       console.log(jobsDataFilename + ' is locked. Trying again later...');
       setTimeout(() => {
-        self._flock(resolve, reject)
+        self._flock(resolve, reject);
       }, 250);
     } else {
       jobsDataFileLocked = true;
@@ -92,7 +92,7 @@ _.extend(Jobs.prototype, {
                   if (err) {
                     reject(err);
                   } else {
-                    resolve(data)
+                    resolve(data);
                   }
                 });
               })
@@ -260,11 +260,11 @@ _.extend(Jobs.prototype, {
               resolve();
             })
             .catch(reason => {
-              reject(reason)
+              reject(reason);
             });
       });
     } catch (ex) {
-      console.log(`EXCEPTION while backing up jobs: ${ex}`)
+      console.log(`EXCEPTION while backing up jobs: ${ex}`);
     } finally {
       // console.log("backupJobs: unlocking in finally");
       this._funlock();
@@ -307,7 +307,7 @@ _.extend(Jobs.prototype, {
           return savedJob;
         }
       } else {
-        throw new Error("Job does not exist")
+        throw new Error("Job does not exist");
       }
     } finally {
       console.log("saveJob: unlocking in finally");

@@ -166,7 +166,6 @@ _.extend(Users.prototype, {
           canRead: user.canRead,
           canWrite: user.canWrite,
           isAdmin: user.isAdmin,
-          isAutologin: user.isAutologin,
           encryptionKeyName: user.encryptionKeyName
         };
       } else {
@@ -195,7 +194,6 @@ _.extend(Users.prototype, {
           canRead: user.canRead,
           canWrite: user.canWrite,
           isAdmin: user.isAdmin,
-          isAutologin: user.isAutologin,
           encryptionKeyName: user.encryptionKeyName
         };
       }
@@ -287,12 +285,7 @@ _.extend(Users.prototype, {
           let tokenData = {
             accessToken: tokenValue
           };
-          if (user.isAutologin) {
-            tokenData.accessTokenExpiresAfter = moment("9999-12-31");
-            tokenData.isAutologin = true;
-          } else {
-            tokenData.accessTokenExpiresAfter = moment().add(this.tokenLifetimeInMinutes, 'minutes');
-          }
+          tokenData.accessTokenExpiresAfter = moment().add(this.tokenLifetimeInMinutes, 'minutes');
           _.extend(user, {accessToken: tokenData.accessToken, accessTokenExpiresAfter: tokenData.accessTokenExpiresAfter});
           let tokenDataToReturn = await new Promise((resolve, reject) => {
             jf.writeFile(filename, data, {spaces: 2}, function (error) {
@@ -335,12 +328,7 @@ _.extend(Users.prototype, {
         let tokenData = {
           accessToken: tokenValue
         };
-        if (user.isAutologin) {
-          tokenData.accessTokenExpiresAfter = moment("9999-12-31");
-          tokenData.isAutologin = true;
-        } else {
-          tokenData.accessTokenExpiresAfter = moment().add(this.tokenLifetimeInMinutes, 'minutes');
-        }
+        tokenData.accessTokenExpiresAfter = moment().add(this.tokenLifetimeInMinutes, 'minutes');
         _.extend(user, {accessToken: tokenData.accessToken, accessTokenExpiresAfter: tokenData.accessTokenExpiresAfter});
         let tokenDataToReturn = await new Promise((resolve, reject) => {
           jf.writeFile(filename, data, {spaces: 2}, function (error) {
@@ -383,11 +371,7 @@ _.extend(Users.prototype, {
             let tokenData = {
               refreshAccessToken: tokenValue
             };
-            if (user.isAutologin) {
-              tokenData.refreshAccessTokenExpiresAfter = moment("9999-12-31");
-            } else {
-              tokenData.refreshAccessTokenExpiresAfter = moment().add(this.tokenLifetimeInMinutes, 'minutes');
-            }
+            tokenData.refreshAccessTokenExpiresAfter = moment().add(this.tokenLifetimeInMinutes, 'minutes');
             console.log(`Refreshed access token for ${name}. Valid until ${tokenData.refreshAccessTokenExpiresAfter.format()}`);
             _.extend(user, {refreshAccessToken: tokenData.refreshAccessToken, refreshAccessTokenExpiresAfter: tokenData.refreshAccessTokenExpiresAfter});
             const tokenDataToReturn = await new Promise((resolve, reject) => {
@@ -528,7 +512,6 @@ _.extend(Users.prototype, {
             canRead: user.canRead,
             canWrite: user.canWrite,
             isAdmin: user.isAdmin,
-            isAutologin: user.isAutologin,
             expiredAfter: user.expiredAfter,
             encryptionKeyName: user.encryptionKeyName
           };
@@ -561,7 +544,6 @@ _.extend(Users.prototype, {
           canRead: false,
           canWrite: false,
           isAdmin: false,
-          isAutologin: false,
           expiredAfter: secretData.expiredAfter,
           accessToken: tokenData.accessToken,
           accessTokenExpiresAfter: tokenData.accessTokenExpiresAfter
@@ -779,7 +761,7 @@ _.extend(Users.prototype, {
     let data = await this._initFile(true);  // don't lock file again, because caller of saveUser must/did lock already
     if (data.users[user.name]) {
       _.extend(data.users[user.name],
-          _.pick(user, 'name', 'email', 'state', 'canRead', 'canWrite', 'isAdmin', 'isAutologin', 'expiredAfter', 'encryptedPrivateKey',
+          _.pick(user, 'name', 'email', 'state', 'canRead', 'canWrite', 'isAdmin', 'expiredAfter', 'encryptedPrivateKey',
               'encryptionPrivateKeySalt', 'encryptionKeyName'));
       const savedUserToReturn = await new Promise((resolve, reject) => {
         jf.writeFile(filename, data, {spaces: 2}, function (error) {
@@ -796,7 +778,6 @@ _.extend(Users.prototype, {
               canRead: savedUser.canRead,
               canWrite: savedUser.canWrite,
               isAdmin: savedUser.isAdmin,
-              isAutologin: savedUser.isAutologin,
               expiredAfter: savedUser.expiredAfter,
               encryptionKeyName: savedUser.encryptionKeyName
             });

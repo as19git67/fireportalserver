@@ -9,7 +9,6 @@ const moment = require('moment');
 let app = express();
 const apiRouter = require('./routes/api')(app);
 
-
 app.set('appName', 'Firealarm Portal Server');
 app.use(helmet());
 
