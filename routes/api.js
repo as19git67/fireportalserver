@@ -105,7 +105,8 @@ module.exports = function (app) {
   /* get all jobs */
   // perms needed: canRead
   router.get('/jobs', CORS(corsOptions), authenticate, Right('read'), function (req, res, next) {
-    new Jobs().getAll()
+    const withImages = !!req.query.withImages;
+    new Jobs().getAll({withImages: withImages})
         .then(jobs => {
           res.json(jobs);
         })
@@ -128,7 +129,7 @@ module.exports = function (app) {
       const jobId = req.params.id;
       const passphrase = req.headers.password;
       const keyName = req.headers.encryptionkeyname;
-      const complete = !!req.query.complete;
+      const withImages = !!req.query.withImages;
       if (passphrase && keyName) {
         new Users().getPrivateKey(username, passphrase)
             .then(keyObj => {
@@ -149,7 +150,7 @@ module.exports = function (app) {
                     console.log(`Decrypting job ${jobId} by user ${username}...`);
                     new Jobs().getJobById(jobId, keyObj)
                         .then(decryptedJob => {
-                          if (decryptedJob && !complete) {
+                          if (decryptedJob && !withImages) {
                             delete decryptedJob.images;
                           }
                           res.json(decryptedJob);
@@ -177,7 +178,7 @@ module.exports = function (app) {
       } else {
         new Jobs().getJobById(jobId)
             .then(job => {
-              if (job && !complete) {
+              if (job && !withImages) {
                 delete job.images;
               }
               res.json(job);
@@ -554,7 +555,7 @@ module.exports = function (app) {
             duration: 0,
             rescued: 0,
             recovered: 0,
-            material: _makeMaterial(fields),
+            // material: _makeMaterial(fields),
             others: _makeOthers(fields)
           },
           images: images

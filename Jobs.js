@@ -140,16 +140,20 @@ _.extend(Jobs.prototype, {
   },
 
   /* return all jobs as array, sorted by start */
-  getAll: async function () {
+  getAll: async function (options) {
+    options || (options = {});
     try {
       // console.log(`getAll: _initFile`);
       let data = await this._initFile();
       if (data) {
         let jobs = _.map(data.jobs, function (job, key) {
           let oneJob = _.pick(job, 'encrypted', 'encryptedRandomBase64', 'encryptionRandomIvBase64', 'encryptedData', 'start', 'end', 'title',
-              'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city', 'object', 'resource', 'plan', 'images',
+              'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city', 'object', 'resource', 'plan',
               'attendees', 'report');
           oneJob.id = key;
+          if (options.withImages) {
+            oneJob.images = job.images;
+          }
           return oneJob;
         });
         // console.log(`getAll: returning sorted jobs`);
