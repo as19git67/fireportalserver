@@ -554,9 +554,9 @@ module.exports = function (app) {
             location: _makeAddress(fields),
             duration: 0,
             rescued: 0,
-            recovered: 0,
+            recovered: 0
             // material: _makeMaterial(fields),
-            others: _makeOthers(fields)
+            // others: _makeOthers(fields)
           },
           images: images
         };
