@@ -44,7 +44,7 @@ _.extend(Jobs.prototype, {
   _flock: function (resolve, reject) {
     // check if already locked with explicit lock function
     if (this._locked) {
-      console.log('Skip locking with _flock, because already locked by lock()');
+      // console.log('Skip locking with _flock, because already locked by lock()');
       resolve();
       return;
     }
@@ -65,7 +65,7 @@ _.extend(Jobs.prototype, {
     if (!this._locked) {
       _unlockJobsDataFile();
     } else {
-      console.log('Skip unlocking with _unlockJobsDataFile, because expecting to unlock with unlock()');
+      // console.log('Skip unlocking with _unlockJobsDataFile, because expecting to unlock with unlock()');
     }
   },
 
@@ -283,7 +283,7 @@ _.extend(Jobs.prototype, {
       throw new Error(err);
     }
     try {
-      console.log(`saveJob: _initFile`);
+      // console.log(`saveJob: _initFile`);
       let data = await this._initFile();
 
       if (data.jobs[job.id]) {
@@ -305,16 +305,16 @@ _.extend(Jobs.prototype, {
                   console.log(`saveJob: error writing ${filename}`);
                   reject(reason);
                 });
-            console.log(`saveJob: started writing ${filename}...`);
+            // console.log(`saveJob: started writing ${filename}...`);
           });
-          console.log(`saveJob: returning saved job`);
+          // console.log(`saveJob: returning saved job`);
           return savedJob;
         }
       } else {
         throw new Error("Job does not exist");
       }
     } finally {
-      console.log("saveJob: unlocking in finally");
+      // console.log("saveJob: unlocking in finally");
       this._funlock();
     }
   },

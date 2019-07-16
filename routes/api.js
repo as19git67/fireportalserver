@@ -230,7 +230,7 @@ module.exports = function (app) {
         const levelOneKeysOfPossibleChanges = ['start', 'end', 'title', 'number', 'encrypted'];
         const attendeesKeysOfPossibleChanges = ['id', 'lastname', 'firstname'];
         const reportKeysOfPossibleChanges = [
-          'incident', 'location', 'director', 'text', 'material', 'rescued', 'recovered', 'others', 'duration', 'staffcount',
+          'incident', 'location', 'director', 'text', 'materialList', 'rescued', 'recovered', 'others', 'duration', 'staffcount',
           'writer'
         ];
         newJobData = _.pick(data, levelOneKeysOfPossibleChanges);

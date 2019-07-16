@@ -52,7 +52,7 @@ _.extend(Users.prototype, {
   _flock: function (resolve, reject) {
     // check if already locked with explicit lock function
     if (this._locked) {
-      console.log('Skip locking with _flock, because already locked by lock()');
+      // console.log('Skip locking with _flock, because already locked by lock()');
       resolve();
       return;
     }
@@ -73,7 +73,7 @@ _.extend(Users.prototype, {
     if (!this._locked) {
       _unlockUsersDataFile();
     } else {
-      console.log('Skip unlocking with _unlockUsersDataFile, because expecting to unlock with unlock()');
+      // console.log('Skip unlocking with _unlockUsersDataFile, because expecting to unlock with unlock()');
     }
   },
 
