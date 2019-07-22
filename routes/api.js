@@ -233,6 +233,7 @@ module.exports = function (app) {
           'incident', 'location', 'director', 'text', 'materialList', 'rescued', 'recovered', 'others', 'duration', 'staffcount',
           'writer'
         ];
+        const materialListKeysOfPossibleChanges = ['id', 'val', 'type', 'values'];
         newJobData = _.pick(data, levelOneKeysOfPossibleChanges);
         if (data.attendees) {
           newJobData.attendees = _.map(data.attendees, function (attendee) {
@@ -241,9 +242,17 @@ module.exports = function (app) {
         }
         if (data.report) {
           if (!originalJob.report) {
-            originalJob.report = {};
+            originalJob.report = {materialList: []};
+          } else {
+            if (!originalJob.report.materialList) {
+              originalJob.report.materialList = [];
+            }
           }
           newJobData.report = _.extend(originalJob.report, _.pick(req.body.report, reportKeysOfPossibleChanges));
+          newJobData.report.materialList = [];
+          _.each(req.body.report.materialList, material => {
+            newJobData.report.materialList.push(_.pick(material, materialListKeysOfPossibleChanges));
+          });
         }
       }
       let jobToSave = _.extend(originalJob, newJobData);
@@ -583,7 +592,7 @@ module.exports = function (app) {
     }
 
     let data = req.body;
-    if (_.isString(data['email']) && _.isString(data['name'])) {
+    if (_.isString(data.email) && data.email && _.isString(data.name) && data.name) {
       // console.log(JSON.stringify(data, null, 2));
       let u = new Users();
       try {
@@ -597,8 +606,9 @@ module.exports = function (app) {
             return;
           }
           if (existingUser === undefined || (existingUser && existingUser.state === 'new')) {
+            let user;
             try {
-              const user = await u.createUser(data.name, data.email);
+              user = await u.createUser(data.name, data.email);
               // console.log("New user: " + JSON.stringify(user, null, 2));
 
               // allow sending email again earliest in 1 minute
