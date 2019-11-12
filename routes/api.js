@@ -233,7 +233,7 @@ module.exports = function (app) {
           'incident', 'location', 'director', 'text', 'materialList', 'rescued', 'recovered', 'others', 'duration', 'staffcount',
           'writer'
         ];
-        const materialListKeysOfPossibleChanges = ['id', 'val', 'type', 'values'];
+        const materialListKeysOfPossibleChanges = ['id', 'matId', 'name', 'category', 'values'];
         newJobData = _.pick(data, levelOneKeysOfPossibleChanges);
         if (data.attendees) {
           newJobData.attendees = _.map(data.attendees, function (attendee) {
