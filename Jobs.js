@@ -283,6 +283,11 @@ _.extend(Jobs.prototype, {
       throw new Error(err);
     }
     try {
+      if (job.report) {
+        if (job.report.materialList && job.report.material) {
+          delete job.report.material;
+        }
+      }
       // console.log(`saveJob: _initFile`);
       let data = await this._initFile();
 
