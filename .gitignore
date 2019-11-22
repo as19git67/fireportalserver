@@ -17,3 +17,4 @@ node_modules/
 /decryption_key.pem
 /encryption_key.pem
 /jobs - Kopie.json
+/users.bak.json
