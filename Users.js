@@ -315,7 +315,7 @@ _.extend(Users.prototype, {
 
   createAccessTokenForUser: async function (name) {
     if (name === 'undefined' || !name) {
-      throw new Error('undefined name');
+      throw {message: 'undefined name', status: 400};
     }
 
     const tokenValue = hat().toString('base64');
@@ -345,7 +345,7 @@ _.extend(Users.prototype, {
         });
         return tokenDataToReturn;
       } else {
-        throw new Error("User does not exist");
+        throw {message: "user does not exist", status: 401};
       }
     } finally {
       this._funlock();
@@ -355,7 +355,7 @@ _.extend(Users.prototype, {
 
   refreshToken: async function (name) {
     if (name === 'undefined' || !name) {
-      throw {message: 'undefined name', status: 401};
+      throw {message: 'undefined name', status: 400};
     }
     const filename = this.filename;
     try {
@@ -448,7 +448,7 @@ _.extend(Users.prototype, {
           }
         }
       } else {
-        throw new {message: "user does not exist", status: 401};
+        throw {message: "user does not exist", status: 401};
       }
     } finally {
       // console.log(`verifyTokenAndGetUser: unlocking - finally`);

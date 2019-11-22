@@ -745,7 +745,7 @@ module.exports = function (app) {
             res.json(result);
           })
           .catch(reason => {
-            console.error('creating access token failed: ', reason);
+            console.error('creating access token failed: ', reason.message);
             res.status(reason.status ? reason.status : 500).end();
           });
     } else {
