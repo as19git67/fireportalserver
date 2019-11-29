@@ -248,11 +248,14 @@ module.exports = function (app) {
               originalJob.report.materialList = [];
             }
           }
-          newJobData.report = _.extend(originalJob.report, _.pick(req.body.report, reportKeysOfPossibleChanges));
-          newJobData.report.materialList = [];
-          _.each(req.body.report.materialList, material => {
-            newJobData.report.materialList.push(_.pick(material, materialListKeysOfPossibleChanges));
-          });
+          newJobData.report = _.extend(originalJob.report, _.pick(data.report, reportKeysOfPossibleChanges));
+          if (data.report.materialList) {
+            // update material list if there was material sent with the request
+            newJobData.report.materialList = [];
+            _.each(data.report.materialList, material => {
+              newJobData.report.materialList.push(_.pick(material, materialListKeysOfPossibleChanges));
+            });
+          }
         }
       }
       let jobToSave = _.extend(originalJob, newJobData);
