@@ -12,6 +12,7 @@ const formidable = require('formidable');
 const Jobs = require('../Jobs');
 const Users = require('../Users');
 const Staff = require('../Staff');
+const Material = require('../Material');
 const WebSocket = require('ws');
 const forge = require('node-forge');
 
@@ -83,6 +84,36 @@ module.exports = function (app) {
       }
     };
   };
+
+  router.options('/materialmeta', CORS(corsOptions)); // enable pre-flight
+
+  /* get material metadata */
+  // perms needed: canRead
+  router.get('/materialmeta', CORS(corsOptions), authenticate, Right('read'), function (req, res, next) {
+    new Material().getMeta()
+        .then(meta => {
+          res.json(meta);
+        })
+        .catch(reason => {
+          console.log("ERROR getting meta: ", reason);
+          res.status(500).end();
+        });
+  });
+
+  router.options('/materialtypes', CORS(corsOptions)); // enable pre-flight
+
+  /* get material types */
+  // perms needed: canRead
+  router.get('/materialtypes', CORS(corsOptions), authenticate, Right('read'), function (req, res, next) {
+    new Material().getTypes()
+        .then(materialTypes => {
+          res.json(materialTypes);
+        })
+        .catch(reason => {
+          console.log("ERROR getting materialTypes: ", reason);
+          res.status(500).end();
+        });
+  });
 
   router.options('/staff', CORS(corsOptions)); // enable pre-flight
 
