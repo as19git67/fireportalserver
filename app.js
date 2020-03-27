@@ -53,7 +53,9 @@ app.use(function (req, res, next) {
     return;
   }
 
-  if (req.secure || process.env.NODE_ENV === 'development') {
+  let proxyForwardedFor = req.headers['x-forwarded-for'];
+
+  if (proxyForwardedFor || req.secure || process.env.NODE_ENV === 'development') {
     // request was via https or server runs in a dev environment ->no special handling
     // if (req.secure) {
     //   console.log("Request is already https - next()");
