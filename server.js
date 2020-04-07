@@ -14,6 +14,7 @@ const path = require('path');
 const WebSocket = require('ws');
 
 function _startWebSockets(server) {
+  console.log('Starting websockets server...');
   const wss = new WebSocket.Server({server});
   app.set('wss', wss);
   wss.on('connection', function connection(ws, req) {

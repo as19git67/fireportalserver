@@ -36,8 +36,10 @@ let options = {
 };
 
 postJob(options, postData).then(results => {
+    console.log('Finished');
     console.log(results)
 }).catch(reason => {
+    console.log('ERROR:');
     console.log(reason);
 });
 
@@ -92,10 +94,12 @@ async function _sendRequest(restApiUrl, authorizationBearer, acceptSelfSignedCer
         });
 
         delete reqOpts.auth;  // don't log auth data
+/*
         console.log(`request options are: ${util.inspect(reqOpts, {
             breakLength: Infinity,
             colors: true,
             depth: 0
         })}`);
+*/
     });
 }
