@@ -353,6 +353,13 @@ module.exports = function (app) {
               if (_.contains(reportAttributesExceptions, key)) {
                 return false; // don't check this attribute for any value
               }
+              if (key === 'materialList') {
+                const matList = job.report[key];
+                if (!matList || !matList.length) {
+                  return false; // ignore empty material list
+                }
+              }
+
               const attribute = job.report[key];
               if (_.isString(attribute)) {
                 const num = parseFloat(attribute);
@@ -551,12 +558,12 @@ module.exports = function (app) {
                 let fullFilepath = path.join(debugSavePrintfiles, file.name);
                 if (!path.extname(fullFilepath)) {
                   switch (file.type) {
-                  case 'image/png':
-                    fullFilepath = fullFilepath + '.png';
-                    break;
-                  case 'text/plain':
-                    fullFilepath = fullFilepath + '.txt';
-                    break;
+                    case 'image/png':
+                      fullFilepath = fullFilepath + '.png';
+                      break;
+                    case 'text/plain':
+                      fullFilepath = fullFilepath + '.txt';
+                      break;
                   }
                 }
                 fs.writeFile(fullFilepath, data, function (err) {
@@ -653,7 +660,8 @@ module.exports = function (app) {
               return;
             }
             try {
-              await _sendVerificationEmail(data.email, `${req.headers.origin}/#/setupauth3?name=${data.name}&email=${data.email}&token=${user.accessToken}`);
+              await _sendVerificationEmail(data.email,
+                  `${req.headers.origin}/#/setupauth3?name=${data.name}&email=${data.email}&token=${user.accessToken}`);
 
               resolve();
 
