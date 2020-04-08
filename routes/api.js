@@ -291,6 +291,7 @@ module.exports = function (app) {
       }
       let jobToSave = _.extend(originalJob, newJobData);
       let updatedJob = await j.saveJob(jobToSave);
+      req.app.get('backupJobs')(j); // backup jobs
       return {updatedJob: updatedJob, decrypted: false};
     } finally {
       j.unlock();
