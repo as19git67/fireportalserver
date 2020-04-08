@@ -681,7 +681,13 @@ module.exports = function (app) {
           res.status(200).end();
         }).catch(reason => {
           if (reason.exception) {
-            console.error(reason.exception);
+            if (reason.exception.responseCode === 501) {
+              res.status(400); // bad request
+              res.send(reason.exception.message);
+              return;
+            } else {
+              console.error(reason.exception);
+            }
           }
           if (reason.message) {
             console.log(reason.message);
