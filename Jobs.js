@@ -252,10 +252,18 @@ _.extend(Jobs.prototype, {
       // console.log(`backupJobs: _initFile`);
       let data = await this._initFile();
       const encryptedJobs = {};
-      const encryptedJobsAsArray = _.where(data.jobs, {encrypted: true});
-      _.each(encryptedJobsAsArray, function (job) {
-        encryptedJobs[job.id] = job;
-      });
+
+      for (let i = 0; i < data.jobs; i++) {
+        const job = data.jobs[i];
+        if (job.encrypted) {
+          encryptedJobs[job.id] = job;
+        } else {
+          console.log(`Encrypting job ${job.id} for backup...`);
+          const encryptedJob = await this._encrypt(job);
+          console.log('...done.');
+          encryptedJobs[job.id] = encryptedJob;
+        }
+      }
 
       await new Promise((resolve, reject) => {
         jf.writeFile(filename, {jobs: encryptedJobs, sequence: data.sequence}, {spaces: 2})
