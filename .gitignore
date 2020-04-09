@@ -19,3 +19,4 @@ node_modules/
 /encryption_key.pem
 /jobs - Kopie.json
 /users.bak.json
+/jobs.backup*
