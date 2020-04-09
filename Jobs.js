@@ -253,15 +253,17 @@ _.extend(Jobs.prototype, {
       let data = await this._initFile();
       const encryptedJobs = {};
 
-      for (let i = 0; i < data.jobs; i++) {
-        const job = data.jobs[i];
+      const jobKeys = Object.keys(data.jobs);
+      for (let i = 0; i < jobKeys.length; i++) {
+        const jobKey = jobKeys[i];
+        const job = data.jobs[jobKey];
         if (job.encrypted) {
-          encryptedJobs[job.id] = job;
+          encryptedJobs[jobKey] = job;
         } else {
           console.log(`Encrypting job ${job.id} for backup...`);
           const encryptedJob = await this._encrypt(job);
           console.log('...done.');
-          encryptedJobs[job.id] = encryptedJob;
+          encryptedJobs[jobKey] = encryptedJob;
         }
       }
 
