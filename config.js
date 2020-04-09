@@ -99,7 +99,8 @@ nconf.defaults({
   "email_smtp_password": "",
   "email_smtp_use_SSL": false,
   "email_smtp_server_host": "",
-  "email_smtp_server_port": ""
+  "email_smtp_server_port": "",
+  "jobsBackupPath": __dirname
 });
 
 module.exports = nconf;

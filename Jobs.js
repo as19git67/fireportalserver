@@ -246,7 +246,8 @@ _.extend(Jobs.prototype, {
   },
 
   backupJobs: async function () {
-    const filename = path.join(__dirname, `jobs.backup.${moment().format('YYYY-MM-DD__HH.mm.ss')}.json`);
+    const jobsBackupPath = config.get('jobsBackupPath');
+    const filename = path.join(jobsBackupPath, `jobs.backup.${moment().format('YYYY-MM-DD__HH.mm.ss')}.json`);
     console.log(`Jobs backup started. Backup file is ${filename}`);
     try {
       // console.log(`backupJobs: _initFile`);
