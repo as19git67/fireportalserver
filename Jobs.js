@@ -5,6 +5,7 @@ const _ = require('underscore');
 const moment = require('moment');
 const config = require('./config');
 const crypto = require('crypto');
+const zlib = require('zlib');
 
 const jobsDataFilename = 'jobs.json';
 let jobsDataFileLocked = false;
@@ -87,18 +88,18 @@ _.extend(Jobs.prototype, {
           new Promise((resolve, reject) => {
             self._flock(resolve, reject);
           })
-              .then(() => {
-                jf.readFile(self.filename, function (err, data) {
-                  if (err) {
-                    reject(err);
-                  } else {
-                    resolve(data);
-                  }
-                });
-              })
-              .catch(reason => {
-                reject(reason);
-              });
+          .then(() => {
+            jf.readFile(self.filename, function (err, data) {
+              if (err) {
+                reject(err);
+              } else {
+                resolve(data);
+              }
+            });
+          })
+          .catch(reason => {
+            reject(reason);
+          });
         }
       });
     });
@@ -125,8 +126,8 @@ _.extend(Jobs.prototype, {
           job = await this._decrypt(job, keyObj);
         }
         let jobData = _.pick(job, 'id', 'encrypted', 'encryptedRandomBase64', 'encryptionRandomIvBase64', 'encryptedData', 'start', 'end', 'title',
-            'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city', 'object', 'resource', 'plan', 'images',
-            'attendees', 'report');
+          'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city', 'object', 'resource', 'plan', 'images',
+          'attendees', 'report');
         jobData.id = id;
         // console.log(`getJobById: returning job ${id}`);
         return jobData;
@@ -148,8 +149,8 @@ _.extend(Jobs.prototype, {
       if (data) {
         let jobs = _.map(data.jobs, function (job, key) {
           let oneJob = _.pick(job, 'encrypted', 'encryptedRandomBase64', 'encryptionRandomIvBase64', 'encryptedData', 'start', 'end', 'title',
-              'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city', 'object', 'resource', 'plan',
-              'attendees', 'report');
+            'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city', 'object', 'resource', 'plan',
+            'attendees', 'report');
           oneJob.id = key;
           if (options.withImages) {
             oneJob.images = job.images;
@@ -169,7 +170,7 @@ _.extend(Jobs.prototype, {
   },
 
   _addJob: async function (encrypted, start, end, title, number, keyword, catchword, longitude, latitude, street, streetnumber, city, object, resource, plan,
-      images, attendees, report) {
+                           images, attendees, report) {
     try {
       console.log(`_addJob: _initFile`);
       let data = await this._initFile();
@@ -227,14 +228,14 @@ _.extend(Jobs.prototype, {
       const filename = this.filename;
       const addedJob = await new Promise((resolve, reject) => {
         jf.writeFile(filename, data, {spaces: 2})
-            .then(() => {
-              console.log(`_addJob: ${filename} written`);
-              resolve(job);
-            })
-            .catch(reason => {
-              console.log(`_addJob: error writing ${filename}`);
-              reject(reason);
-            });
+        .then(() => {
+          console.log(`_addJob: ${filename} written`);
+          resolve(job);
+        })
+        .catch(reason => {
+          console.log(`_addJob: error writing ${filename}`);
+          reject(reason);
+        });
         console.log(`_addJob: started writing ${filename}`);
       });
       console.log(`_addJob: returning added job`);
@@ -268,15 +269,27 @@ _.extend(Jobs.prototype, {
         }
       }
 
+      const compressedJobs = await new Promise((resolve, reject) => {
+        console.log('compressing backup...');
+        const jsonData = JSON.stringify({jobs: encryptedJobs, sequence: data.sequence, compressed: 'gzip'});
+        zlib.gzip(jsonData, (err, buffer) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(buffer);
+          }
+        });
+      });
+
       await new Promise((resolve, reject) => {
-        jf.writeFile(filename, {jobs: encryptedJobs, sequence: data.sequence}, {spaces: 2})
-            .then(() => {
-              console.log(`Backup of encrypted jobs written to ${filename}`);
-              resolve();
-            })
-            .catch(reason => {
-              reject(reason);
-            });
+        fs.writeFile(filename, compressedJobs, 'binary', err => {
+          if (err) {
+            reject(err);
+          } else {
+            console.log(`Backup of encrypted jobs written to ${filename} as gzip compressed file.`);
+            resolve();
+          }
+        });
       });
     } catch (ex) {
       console.log(`EXCEPTION while backing up jobs: ${ex}`);
@@ -307,20 +320,20 @@ _.extend(Jobs.prototype, {
           throw new Error('job is encrypted');
         } else {
           _.extend(data.jobs[job.id],
-              _.pick(job, 'encrypted', 'start', 'end', 'title', 'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street',
-                  'streetnumber', 'city',
-                  'object', 'resource', 'plan', 'images', 'attendees', 'report'));
+            _.pick(job, 'encrypted', 'start', 'end', 'title', 'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street',
+              'streetnumber', 'city',
+              'object', 'resource', 'plan', 'images', 'attendees', 'report'));
           const filename = this.filename;
           let savedJob = await new Promise((resolve, reject) => {
             jf.writeFile(filename, data, {spaces: 2})
-                .then(() => {
-                  console.log(`saveJob: ${filename} written`);
-                  resolve(data.jobs[job.id]);
-                })
-                .catch(reason => {
-                  console.log(`saveJob: error writing ${filename}`);
-                  reject(reason);
-                });
+            .then(() => {
+              console.log(`saveJob: ${filename} written`);
+              resolve(data.jobs[job.id]);
+            })
+            .catch(reason => {
+              console.log(`saveJob: error writing ${filename}`);
+              reject(reason);
+            });
             // console.log(`saveJob: started writing ${filename}...`);
           });
           // console.log(`saveJob: returning saved job`);
@@ -356,14 +369,14 @@ _.extend(Jobs.prototype, {
       const filename = this.filename;
       const id = await new Promise((resolve, reject) => {
         jf.writeFile(filename, data, {spaces: 2})
-            .then(() => {
-              console.log(`deleteJob: ${filename} written`);
-              resolve(jobId);
-            })
-            .catch(reason => {
-              console.log(`deleteJob: error writing ${filename}`);
-              reject(reason);
-            });
+        .then(() => {
+          console.log(`deleteJob: ${filename} written`);
+          resolve(jobId);
+        })
+        .catch(reason => {
+          console.log(`deleteJob: error writing ${filename}`);
+          reject(reason);
+        });
         console.log(`deleteJob: started writing ${filename}...`);
       });
       console.log(`deleteJob: returning id ${id}`);
@@ -439,7 +452,10 @@ _.extend(Jobs.prototype, {
         iv = Buffer.from(job.encryptionRandomIvBase64, 'base64');
       }
 
-      let aesSecret = crypto.privateDecrypt({key: keyObj.encryptedPrivateKey, passphrase: keyObj.passphrase}, encryptedAesSecret);
+      let aesSecret = crypto.privateDecrypt({
+        key: keyObj.encryptedPrivateKey,
+        passphrase: keyObj.passphrase
+      }, encryptedAesSecret);
 
       // decrypt data
       let decipher = crypto.createDecipheriv('aes-256-cbc', aesSecret, iv);
@@ -488,14 +504,14 @@ _.extend(Jobs.prototype, {
       const filename = this.filename;
       let ej = await new Promise((resolve, reject) => {
         jf.writeFile(filename, data, {spaces: 2})
-            .then(() => {
-              console.log(`encryptJob: ${filename} written`);
-              resolve(encryptedJob);
-            })
-            .catch(reason => {
-              console.log(`encryptJob: error writing ${filename}`);
-              reject(reason);
-            });
+        .then(() => {
+          console.log(`encryptJob: ${filename} written`);
+          resolve(encryptedJob);
+        })
+        .catch(reason => {
+          console.log(`encryptJob: error writing ${filename}`);
+          reject(reason);
+        });
         console.log(`encryptJob: started writing ${filename}`);
       });
       console.log(`encryptJob: returning encrypted job`);
@@ -517,14 +533,14 @@ _.extend(Jobs.prototype, {
       const filename = this.filename;
       let dj = await new Promise((resolve, reject) => {
         jf.writeFile(filename, data, {spaces: 2})
-            .then(() => {
-              console.log(`decryptJob: ${filename} written`);
-              resolve(decryptedJob);
-            })
-            .catch(reason => {
-              console.log(`decryptJob: error writing ${filename}`);
-              reject(reason);
-            });
+        .then(() => {
+          console.log(`decryptJob: ${filename} written`);
+          resolve(decryptedJob);
+        })
+        .catch(reason => {
+          console.log(`decryptJob: error writing ${filename}`);
+          reject(reason);
+        });
         console.log(`decryptJob: started writing ${filename}`);
       });
       console.log(`decryptJob: returning encrypted job`);
