@@ -54,8 +54,14 @@ app.use(function (req, res, next) {
   }
 
   let proxyForwardedFor = req.headers['x-forwarded-for'];
-  if (proxyForwardedFor) {
-    console.log(`x-forwarded-for: ${proxyForwardedFor}`);
+
+  let realIP = req.headers['x-real-ip'];
+  if (realIP) {
+    console.log(`x-real-ip: ${realIP}`);
+  }
+  let host = req.headers['host'];
+  if (host) {
+    console.log(`host: ${host}`);
   }
 
   if (proxyForwardedFor || req.secure || process.env.NODE_ENV === 'development') {
