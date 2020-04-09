@@ -117,7 +117,7 @@ module.exports = function (app) {
 
   router.options('/staff', CORS(corsOptions)); // enable pre-flight
 
-  /* get all jobs */
+  /* get all staff members */
   // perms needed: canRead
   router.get('/staff', CORS(corsOptions), authenticate, Right('read'), function (req, res, next) {
     const groupId = "21204";
