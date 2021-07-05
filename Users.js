@@ -100,18 +100,18 @@ _.extend(Users.prototype, {
               self._flock(resolve, reject);
             }
           })
-              .then(() => {
-                jf.readFile(self.filename, function (err, data) {
-                  if (err) {
-                    reject(err);
-                  } else {
-                    resolve(data);
-                  }
-                });
-              })
-              .catch(reason => {
-                reject(reason);
-              });
+          .then(() => {
+            jf.readFile(self.filename, function (err, data) {
+              if (err) {
+                reject(err);
+              } else {
+                resolve(data);
+              }
+            });
+          })
+          .catch(reason => {
+            reject(reason);
+          });
         }
       });
     });
@@ -166,6 +166,7 @@ _.extend(Users.prototype, {
           canRead: user.canRead,
           canWrite: user.canWrite,
           isAdmin: user.isAdmin,
+          isGroupAdmin: user.isGroupAdmin,
           encryptionKeyName: user.encryptionKeyName
         };
       } else {
@@ -194,6 +195,7 @@ _.extend(Users.prototype, {
           canRead: user.canRead,
           canWrite: user.canWrite,
           isAdmin: user.isAdmin,
+          isGroupAdmin: user.isGroupAdmin,
           encryptionKeyName: user.encryptionKeyName
         };
       }
@@ -215,7 +217,12 @@ _.extend(Users.prototype, {
       const user = data.users[name];
       console.log(`getUserSecretByName: returning`);
       if (user) {
-        const otpauthURL = speakeasy.otpauthURL({secret: user.secret, encoding: 'base32', label: user.email, issuer: issuer});
+        const otpauthURL = speakeasy.otpauthURL({
+          secret: user.secret,
+          encoding: 'base32',
+          label: user.email,
+          issuer: issuer
+        });
         return {
           secret: user.secret,
           otpauthURL: otpauthURL
@@ -286,7 +293,10 @@ _.extend(Users.prototype, {
             accessToken: tokenValue
           };
           tokenData.accessTokenExpiresAfter = moment().add(this.tokenLifetimeInMinutes, 'minutes');
-          _.extend(user, {accessToken: tokenData.accessToken, accessTokenExpiresAfter: tokenData.accessTokenExpiresAfter});
+          _.extend(user, {
+            accessToken: tokenData.accessToken,
+            accessTokenExpiresAfter: tokenData.accessTokenExpiresAfter
+          });
           let tokenDataToReturn = await new Promise((resolve, reject) => {
             jf.writeFile(filename, data, {spaces: 2}, function (error) {
               if (error) {
@@ -329,7 +339,10 @@ _.extend(Users.prototype, {
           accessToken: tokenValue
         };
         tokenData.accessTokenExpiresAfter = moment().add(this.tokenLifetimeInMinutes, 'minutes');
-        _.extend(user, {accessToken: tokenData.accessToken, accessTokenExpiresAfter: tokenData.accessTokenExpiresAfter});
+        _.extend(user, {
+          accessToken: tokenData.accessToken,
+          accessTokenExpiresAfter: tokenData.accessTokenExpiresAfter
+        });
         let tokenDataToReturn = await new Promise((resolve, reject) => {
           jf.writeFile(filename, data, {spaces: 2}, function (error) {
             if (error) {
@@ -373,7 +386,10 @@ _.extend(Users.prototype, {
             };
             tokenData.refreshAccessTokenExpiresAfter = moment().add(this.tokenLifetimeInMinutes, 'minutes');
             console.log(`Refreshed access token for ${name}. Valid until ${tokenData.refreshAccessTokenExpiresAfter.format()}`);
-            _.extend(user, {refreshAccessToken: tokenData.refreshAccessToken, refreshAccessTokenExpiresAfter: tokenData.refreshAccessTokenExpiresAfter});
+            _.extend(user, {
+              refreshAccessToken: tokenData.refreshAccessToken,
+              refreshAccessTokenExpiresAfter: tokenData.refreshAccessTokenExpiresAfter
+            });
             const tokenDataToReturn = await new Promise((resolve, reject) => {
               jf.writeFile(filename, data, {spaces: 2}, function (error) {
                 if (error) {
@@ -438,7 +454,7 @@ _.extend(Users.prototype, {
                 throw {message: 'access token expired', status: 401};
               } else {
                 // console.log(`verifyTokenAndGetUser: returning user data`);
-                return _.pick(user, 'name', 'email', 'state', 'canRead', 'canWrite', 'isAdmin', 'expiredAfter', 'encryptionKeyName');
+                return _.pick(user, 'name', 'email', 'state', 'canRead', 'canWrite', 'isAdmin', 'isGroupAdmin', 'expiredAfter', 'encryptionKeyName');
               }
             } else {
               throw {message: 'invalid access token', status: 401};
@@ -463,6 +479,7 @@ _.extend(Users.prototype, {
       accessRights.push('admin');
       accessRights.push('read');
       accessRights.push('write');
+      accessRights.push('groupadmin');
       if (user.encryptionKeyName) {
         accessRights.push('decrypt');
       }
@@ -470,6 +487,9 @@ _.extend(Users.prototype, {
         accessRights.push('encrypt');
       }
     } else {
+      if (user.isGroupAdmin) {
+        accessRights.push('groupadmin');
+      }
       if (user.canRead) {
         accessRights.push('read');
       }
@@ -512,6 +532,7 @@ _.extend(Users.prototype, {
             canRead: user.canRead,
             canWrite: user.canWrite,
             isAdmin: user.isAdmin,
+            isGroupAdmin: user.isGroupAdmin,
             expiredAfter: user.expiredAfter,
             encryptionKeyName: user.encryptionKeyName
           };
@@ -544,6 +565,7 @@ _.extend(Users.prototype, {
           canRead: false,
           canWrite: false,
           isAdmin: false,
+          isGroupAdmin: false,
           expiredAfter: secretData.expiredAfter,
           accessToken: tokenData.accessToken,
           accessTokenExpiresAfter: tokenData.accessTokenExpiresAfter
@@ -761,8 +783,8 @@ _.extend(Users.prototype, {
     let data = await this._initFile(true);  // don't lock file again, because caller of saveUser must/did lock already
     if (data.users[user.name]) {
       _.extend(data.users[user.name],
-          _.pick(user, 'name', 'email', 'state', 'canRead', 'canWrite', 'isAdmin', 'expiredAfter', 'encryptedPrivateKey',
-              'encryptionPrivateKeySalt', 'encryptionKeyName'));
+        _.pick(user, 'name', 'email', 'state', 'canRead', 'canWrite', 'isAdmin', 'isGroupAdmin', 'expiredAfter', 'encryptedPrivateKey',
+          'encryptionPrivateKeySalt', 'encryptionKeyName'));
       const savedUserToReturn = await new Promise((resolve, reject) => {
         jf.writeFile(filename, data, {spaces: 2}, function (error) {
           if (error) {
@@ -778,6 +800,7 @@ _.extend(Users.prototype, {
               canRead: savedUser.canRead,
               canWrite: savedUser.canWrite,
               isAdmin: savedUser.isAdmin,
+              isGroupAdmin: savedUser.isGroupAdmin,
               expiredAfter: savedUser.expiredAfter,
               encryptionKeyName: savedUser.encryptionKeyName
             });
