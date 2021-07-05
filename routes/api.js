@@ -1050,7 +1050,7 @@ module.exports = function (app) {
     u.getUserByName(name)
         .then(user => {
           if (user) {
-            let newUserData = _.pick(req.body, 'email', 'state', 'isAdmin', 'canRead', 'canWrite', 'isAutologin');
+            let newUserData = _.pick(req.body, 'email', 'state', 'isAdmin', 'isGroupAdmin', 'canRead', 'canWrite', 'isAutologin');
 
             if (req.user.name === name) { // modifying own user data?
               if (user.isAdmin && newUserData.isAdmin !== undefined && !newUserData.isAdmin) {
