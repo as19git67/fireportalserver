@@ -40,12 +40,151 @@ _.extend(Staff.prototype, {
     });
   },
 
+  _addGroup: async function (id, name, description, responsibleEmail) {
+    try {
+      console.log(`_addGroup: _initFile`);
+      let data = await this._initFile();
+
+      if (data.groups[id]) {
+        throw new Error(`Group with id ${id} already exists`);
+      }
+      const group = {
+        id: id,
+        name: name,
+        description: description,
+        responsibleEmail: responsibleEmail
+      };
+
+      data.groups[id] = group;
+
+      const filename = this.filename;
+      const addedGroup = await new Promise((resolve, reject) => {
+        jf.writeFile(filename, data, {spaces: 2})
+        .then(() => {
+          console.log(`_addGroup: ${filename} written`);
+          resolve(group);
+        })
+        .catch(reason => {
+          console.log(`_addGroup: error writing ${filename}`);
+          reject(reason);
+        });
+        console.log(`_addGroup: started writing ${filename}`);
+      });
+      console.log(`_addGroup: returning added group`);
+      return addedGroup;
+    } finally {
+      console.log(`_addGroup: unlocking - finally`);
+      this._funlock();
+    }
+  },
+
+  /* adds a new group */
+  addGroup: async function (id, name, description, responsibleEmail) {
+    if (id && name) {
+      let addedGroup = await this._addGroup(id, name, description, responsibleEmail);
+      return addedGroup;
+    } else {
+      throw new Error("group id or name is undefined");
+    }
+  },
+
+  /* updates group information */
+  saveGroup: async function (group) {
+    if (group.id === undefined) {
+      const err = "ERROR: attempt to save group without id";
+      console.log(err);
+      throw new Error(err);
+    }
+    try {
+      // console.log(`saveGroup: _initFile`);
+      let data = await this._initFile();
+
+      if (data.groups[group.id]) {
+        _.extend(data.groups[group.id], _.pick(group, 'name', 'description', 'responsibleEmail'));
+        const filename = this.filename;
+        let savedGroup = await new Promise((resolve, reject) => {
+          jf.writeFile(filename, data, {spaces: 2})
+          .then(() => {
+            console.log(`saveGroup: ${filename} written`);
+            resolve(data.groups[group.id]);
+          })
+          .catch(reason => {
+            console.log(`saveGroup: error writing ${filename}`);
+            reject(reason);
+          });
+          // console.log(`saveGroup: started writing ${filename}...`);
+        });
+        // console.log(`saveGroup: returning saved group`);
+        return savedGroup;
+      } else {
+        throw new Error("Group does not exist");
+      }
+    } finally {
+      // console.log("saveGroup: unlocking in finally");
+      this._funlock();
+    }
+  },
+
+  deleteGroup: async function (groupId) {
+    if (groupId === undefined) {
+      const err = "ERROR: attempt to delete group with undefined id";
+      console.log(err);
+      throw new Error(err);
+    }
+    if (_.isString(groupId)) {
+      groupId = parseInt(groupId);
+    }
+    if (isNaN(groupId)) {
+      const err = "ERROR: attempt to delete group with id that is not a number";
+      console.log(err);
+      throw new Error(err);
+    }
+    try {
+      console.log(`deleteGroup: _initFile`);
+      let data = await this._initFile();
+      delete data.groups[groupId];
+      const filename = this.filename;
+      const id = await new Promise((resolve, reject) => {
+        jf.writeFile(filename, data, {spaces: 2})
+        .then(() => {
+          console.log(`deleteGroup: ${filename} written`);
+          resolve(groupId);
+        })
+        .catch(reason => {
+          console.log(`deleteGroup: error writing ${filename}`);
+          reject(reason);
+        });
+        console.log(`deleteGroup: started writing ${filename}...`);
+      });
+      console.log(`deleteGroup: returning id ${id}`);
+      return id;
+    } finally {
+      console.log("deleteGroup: unlocking in finally");
+      this._funlock();
+    }
+  },
+
+  getGroups: async function () {
+    let data = await this._initFile();
+    if (data && data.staff && _.isArray(data.staff)) {
+      if (data.staff.groups) {
+        return data.staff.groups;
+      } else {
+        return [];
+      }
+    } else {
+      return [];
+    }
+  },
+
   getAll: async function (groupId) {
     let data = await this._initFile();
     if (data && data.staff && _.isArray(data.staff)) {
 
       let allOfGroup = _.where(data.staff, {groupId: groupId});
-      let sortedStaff = _.sortBy(allOfGroup, function (person) { return person.lastname + person.firstname; });
+      let sortedStaff = _.sortBy(allOfGroup, function (person) {
+        return person.lastname + person.firstname;
+      });
 
       return _.map(sortedStaff, function (person) {
         return {

@@ -61,7 +61,7 @@ module.exports = function (app) {
     }
   }
 
-  let Right = function (right) {
+  let Right = function (right, alternativeRight) {
     return function (req, res, next) {
       if (req.user) {
         let accessRights = req.user.accessRights;
@@ -71,8 +71,13 @@ module.exports = function (app) {
             console.log(`User ${req.user.name} has required right ${right} -> pass`);
             next();
           } else {
-            console.log(`User ${req.user.name} does not have required right ${right}`);
-            next({status: 403});
+            if (_.contains(accessRights, alternativeRight)) {
+              console.log(`User ${req.user.name} has required alternativeRight ${alternativeRight} -> pass`);
+              next();
+            } else {
+              console.log(`User ${req.user.name} does not have required right ${right}`);
+              next({status: 403});
+            }
           }
         } else {
           console.log("Error: user object contains no accessRights");
@@ -1158,6 +1163,21 @@ module.exports = function (app) {
           console.log('Exception while deleting private decryption key.', reason);
         });
   });
+
+  router.options('/groups', CORS(corsOptions)); // enable pre-flight
+
+  // perms needed: isAdmin || isGroupAdmin
+  router.get('/groups', CORS(corsOptions), authenticate, Right('admin', 'groupadmin'), function (req, res, next) {
+    new Staff().getGroups()
+    .then(users => {
+      res.json(users);
+    })
+    .catch(reason => {
+      console.log(`ERROR retrieving users: ${reason}`);
+      res.status(500).end();
+    });
+  });
+
 
   function _pushUpdate(req, message) {
     const wss = req.app.get('wss');
