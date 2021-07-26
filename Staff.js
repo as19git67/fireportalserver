@@ -1,16 +1,73 @@
 const fs = require('fs');
+const path = require('path');
 const jf = require('jsonfile');
 const _ = require('underscore');
+const moment = require('moment');
+const config = require('./config');
+const zlib = require('zlib');
+
+const staffDataFilename = 'staff.json';
+let staffDataFileLocked = false;
+
+function _unlockStaffDataFile() {
+  staffDataFileLocked = false;
+}
+
+_unlockStaffDataFile();
 
 let Staff = module.exports = function (options) {
   options || (options = {});
-  this.filename = "staff.json";
+  this.filename = staffDataFilename;
 
   this.initialize.apply(this, arguments);
 };
 
 _.extend(Staff.prototype, {
   initialize: function () {
+    this._locked = false;
+  },
+
+  lock: async function () {
+    const self = this;
+    // wait for any existing _flock based lock has been released
+    await new Promise((resolve, reject) => {
+      self._flock(resolve, reject);
+    });
+    this._locked = true;
+  },
+
+  unlock: function () {
+    this._locked = false;
+    _unlockStaffDataFile();
+  },
+
+  // the lock function must be a recursive timer
+  _flock: function (resolve, reject) {
+    // check if already locked with explicit lock function
+    if (this._locked) {
+      // console.log('Skip locking with _flock, because already locked by lock()');
+      resolve();
+      return;
+    }
+    const self = this;
+    if (staffDataFileLocked) {
+      console.log(staffDataFilename + ' is locked. Trying again later...');
+      setTimeout(() => {
+        self._flock(resolve, reject);
+      }, 250);
+    } else {
+      staffDataFileLocked = true;
+      resolve();
+    }
+  },
+
+  _funlock: function () {
+    // ignore unlock if explicitly locked by calling lock()
+    if (!this._locked) {
+      _unlockStaffDataFile();
+    } else {
+      // console.log('Skip unlocking with _unlockStaffDataFile, because expecting to unlock with unlock()');
+    }
   },
 
   _initFile: async function () {
@@ -18,7 +75,7 @@ _.extend(Staff.prototype, {
     return new Promise((resolve, reject) => {
       fs.exists(this.filename, function (exists) {
         if (!exists) {
-          let data = {staff: {}};
+          let data = {groups: {}, staff: {}};
           jf.writeFile(self.filename, data, function (err) {
             if (err) {
               reject(err);
@@ -28,12 +85,26 @@ _.extend(Staff.prototype, {
           });
 
         } else {
-          jf.readFile(self.filename, function (err, data) {
-            if (err) {
-              reject(err);
-            } else {
-              resolve(data);
-            }
+          new Promise((resolve, reject) => {
+            self._flock(resolve, reject);
+          })
+          .then(() => {
+            jf.readFile(self.filename, function (err, data) {
+              if (err) {
+                reject(err);
+              } else {
+                if (!data.groups) {
+                  data.groups = {};
+                }
+                if (!data.staff) {
+                  data.staff = {};
+                }
+                resolve(data);
+              }
+            });
+          })
+          .catch(reason => {
+            reject(reason);
           });
         }
       });
@@ -165,38 +236,85 @@ _.extend(Staff.prototype, {
   },
 
   getGroups: async function () {
-    let data = await this._initFile();
-    if (data && data.staff && _.isArray(data.staff)) {
-      if (data.staff.groups) {
-        return data.staff.groups;
+    try {
+      // console.log(`getGroups: _initFile`);
+      let data = await this._initFile();
+      if (data && data.groups) {
+        const groups = _.map(data.groups, (group) => {
+          return group;
+        });
+        return groups;
       } else {
         return [];
       }
-    } else {
-      return [];
+    } finally {
+      // console.log(`getGroups: unlocking - finally`);
+      this._funlock();
     }
   },
 
   getAll: async function (groupId) {
-    let data = await this._initFile();
-    if (data && data.staff && _.isArray(data.staff)) {
+    try {
+      // console.log(`getAll: _initFile`);
+      let data = await this._initFile();
+      if (data && data.staff && _.isArray(data.staff)) {
 
-      let allOfGroup = _.where(data.staff, {groupId: groupId});
-      let sortedStaff = _.sortBy(allOfGroup, function (person) {
-        return person.lastname + person.firstname;
-      });
+        let allOfGroup = _.where(data.staff, {groupId: groupId});
+        let sortedStaff = _.sortBy(allOfGroup, function (person) {
+          return person.lastname + person.firstname;
+        });
 
-      return _.map(sortedStaff, function (person) {
-        return {
-          id: person.id,
-          lastname: person.lastname,
-          firstname: person.firstname
-        };
-      });
-    } else {
-      return [];
+        return _.map(sortedStaff, function (person) {
+          return {
+            id: person.id,
+            lastname: person.lastname,
+            firstname: person.firstname
+          };
+        });
+      } else {
+        return [];
+      }
+    } finally {
+      // console.log(`getAll: unlocking - finally`);
+      this._funlock();
     }
-  }
+  },
+
+  backupStaff: async function () {
+    const staffBackupPath = config.get('staffBackupPath');
+    const filename = path.join(staffBackupPath, `staff.backup.${moment().format('YYYY-MM-DD__HH.mm.ss')}.json.gz`);
+    console.log(`Staff backup started. Backup file is ${filename}`);
+    try {
+      // console.log(`backupStaff: _initFile`);
+      const data = await this._initFile();
+      const compressedStaff = await new Promise((resolve, reject) => {
+        console.log('compressing backup...');
+        zlib.gzip(data, (err, buffer) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(buffer);
+          }
+        });
+      });
+
+      await new Promise((resolve, reject) => {
+        fs.writeFile(filename, compressedStaff, 'binary', err => {
+          if (err) {
+            reject(err);
+          } else {
+            console.log(`Backup of staff data written to ${filename} as gzip compressed file.`);
+            resolve();
+          }
+        });
+      });
+    } catch (ex) {
+      console.log(`EXCEPTION while backing up staff: ${ex}`);
+    } finally {
+      // console.log("backupStaff: unlocking in finally");
+      this._funlock();
+    }
+  },
 
 });
 
