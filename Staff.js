@@ -202,13 +202,8 @@ _.extend(Staff.prototype, {
       console.log(err);
       throw new Error(err);
     }
-    if (_.isString(groupId)) {
-      groupId = parseInt(groupId);
-    }
-    if (isNaN(groupId)) {
-      const err = "ERROR: attempt to delete group with id that is not a number";
-      console.log(err);
-      throw new Error(err);
+    if (!_.isString(groupId)) {
+      groupId = groupId.toString();
     }
     try {
       console.log(`deleteGroup: _initFile`);
@@ -236,6 +231,21 @@ _.extend(Staff.prototype, {
   },
 
   getGroups: async function () {
+    try {
+      // console.log(`getGroups: _initFile`);
+      let data = await this._initFile();
+      if (data && data.groups) {
+        return data.groups;
+      } else {
+        return [];
+      }
+    } finally {
+      // console.log(`getGroups: unlocking - finally`);
+      this._funlock();
+    }
+  },
+
+  getGroupsList: async function () {
     try {
       // console.log(`getGroups: _initFile`);
       let data = await this._initFile();

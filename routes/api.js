@@ -1198,7 +1198,7 @@ module.exports = function (app) {
 
   // perms needed: isAdmin || isGroupAdmin
   router.get('/groups', CORS(corsOptions), authenticate, Right('admin', 'groupadmin'), function (req, res, next) {
-    new Staff().getGroups()
+    new Staff().getGroupsList()
     .then(groups => {
       res.json(groups);
     })
@@ -1224,17 +1224,17 @@ module.exports = function (app) {
       id: req.body.id,
       name: req.body.name,
       description: req.body.description,
-      responsible: req.body.responsible
+      responsibleEmail: req.body.responsibleEmail
     };
 
     const staff = new Staff();
-    staff.addGroup(group.id, group.name, group.description, group.responsible).then(addedGroup => {
+    staff.addGroup(group.id, group.name, group.description, group.responsibleEmail).then(addedGroup => {
       req.app.get('backupStaff')(staff); // backup staff
       res.json({
         id: addedGroup.id,
         name: addedGroup.name,
         description: addedGroup.description,
-        responsible: addedGroup.responsible
+        responsibleEmail: addedGroup.responsibleEmail
       });
 
       // notify all clients
@@ -1253,6 +1253,64 @@ module.exports = function (app) {
       res.send('Error while adding new group data');
     });
 
+  });
+
+  /* update a group */
+  // perms needed: isAdmin or isGrupAdmin
+  router.put('/groups/:id', CORS(corsOptions), authenticate, Right('admin', 'groupadmin'), function (req, res, next) {
+    const id = req.params.id;
+    let staff = new Staff();
+    staff.getGroups()
+    .then(groups => {
+      let group = groups[id];
+      if (group) {
+
+        let newGroupData = _.pick(req.body, 'id', 'name', 'description', 'responsibleEmail');
+
+        let updateGroup = _.extend(group, newGroupData);
+
+        staff.saveGroup(updateGroup)
+        .then(savedGroup => {
+          res.json(savedGroup);
+        })
+        .catch(reason => {
+          console.log(`ERROR retrieving group with id ${id}: ${reason}`);
+          res.status(500).end();
+        });
+      } else {
+        res.status(404).end();
+      }
+    })
+    .catch(reason => {
+      console.log(`ERROR retrieving group with id ${id}: ${reason}`);
+      res.status(500).end();
+    });
+  });
+
+  /* delete a group */
+  // perms needed: isAdmin
+  router.delete('/groups/:id', CORS(corsOptions), authenticate, Right('admin', 'groupadmin'), function (req, res, next) {
+    const id = req.params.id;
+    let staff = new Staff();
+    staff.getGroups()
+    .then(groups => {
+      if (groups[id]) {
+        staff.deleteGroup(id)
+        .then(() => {
+          res.end();
+        })
+        .catch(reason => {
+          console.log(`ERROR deleting Group with id ${id}: ${reason}`);
+          res.status(500).end();
+        });
+      } else {
+        res.status(404).end();
+      }
+    })
+    .catch(reason => {
+      console.log(`ERROR reading groups: ${reason}`);
+      res.status(500).end();
+    });
   });
 
 
