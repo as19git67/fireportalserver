@@ -75,7 +75,7 @@ _.extend(Staff.prototype, {
     return new Promise((resolve, reject) => {
       fs.exists(this.filename, function (exists) {
         if (!exists) {
-          let data = {groups: {}, staff: {}};
+          let data = {groups: {}, members: {}, staff: {}};
           jf.writeFile(self.filename, data, function (err) {
             if (err) {
               reject(err);
@@ -286,6 +286,192 @@ _.extend(Staff.prototype, {
       }
     } finally {
       // console.log(`getAll: unlocking - finally`);
+      this._funlock();
+    }
+  },
+
+  getMembers: async function () {
+    try {
+      // console.log(`getMembers: _initFile`);
+      let data = await this._initFile();
+      if (data && data.members) {
+        return data.members;
+      } else {
+        return {};
+      }
+    } finally {
+      // console.log(`getMembers: unlocking - finally`);
+      this._funlock();
+    }
+  },
+
+  getMembersList: async function () {
+    try {
+      // console.log(`getMembersList: _initFile`);
+      let data = await this._initFile();
+      if (data && data.members) {
+        const members = _.map(data.members, (member) => {
+          return member;
+        });
+        return members;
+      } else {
+        return [];
+      }
+    } finally {
+      // console.log(`getMembersList: unlocking - finally`);
+      this._funlock();
+    }
+  },
+
+  getAllMembersByGroupId: async function (groupId) {
+    try {
+      // console.log(`getAllMembersByGroupId: _initFile`);
+      let data = await this._initFile();
+      let members = [];
+      if (data && data.members) {
+        const memberIds = Object.keys(data.members);
+        for (let i = 0; i < memberIds.length; i++) {
+          const memberId = memberIds[i];
+          const member = data.members[memberId];
+          if (_.isArray(member.groups)) {
+            for (let j = 0; j < member.groups.length; j++) {
+              const group = member.groups[j];
+              if (group.id === groupId) {
+                members.push(member);
+                break;
+              }
+            }
+          }
+        }
+        const sortedMembers = _.sortBy(members, function (member) {
+          return member.lastname + member.firstname;
+        });
+        return sortedMembers;
+      } else {
+        return [];
+      }
+    } finally {
+      // console.log(`getAll: unlocking - finally`);
+      this._funlock();
+    }
+  },
+
+  _addMember: async function (id, lastname, firstname, mobile, email) {
+    try {
+      console.log(`_addMember: _initFile`);
+      let data = await this._initFile();
+
+      if (data.members[id]) {
+        throw new Error(`Member with id ${id} already exists`);
+      }
+      const member = {
+        id: id,
+        lastname: lastname,
+        firstname: firstname,
+        mobile: mobile,
+        email: email
+      };
+
+      data.members[id] = member;
+
+      const filename = this.filename;
+      const addedMember = await new Promise((resolve, reject) => {
+        jf.writeFile(filename, data, {spaces: 2})
+        .then(() => {
+          console.log(`_addMember: ${filename} written`);
+          resolve(member);
+        })
+        .catch(reason => {
+          console.log(`_addMember: error writing ${filename}`);
+          reject(reason);
+        });
+        console.log(`_addMember: started writing ${filename}`);
+      });
+      console.log(`_addMember: returning added member`);
+      return addedMember;
+    } finally {
+      console.log(`_addMember: unlocking - finally`);
+      this._funlock();
+    }
+  },
+
+  /* adds a new member */
+  addMember: async function (id, lastname, firstname, mobile, email) {
+    if (id && lastname && firstname) {
+      let addedMember = await this._addMember(id, lastname, firstname, mobile, email);
+      return addedMember;
+    } else {
+      throw new Error("member id, lastname or firstname is undefined");
+    }
+  },
+
+  /* updates member information */
+  saveMember: async function (member) {
+    if (member.id === undefined) {
+      const err = "ERROR: attempt to save member without id";
+      console.log(err);
+      throw new Error(err);
+    }
+    try {
+      // console.log(`saveMember: _initFile`);
+      let data = await this._initFile();
+
+      if (data.members[member.id]) {
+        _.extend(data.members[member.id], _.pick(member, 'lastname', 'firstname', 'mobile', 'email'));
+        const filename = this.filename;
+        let savedMember = await new Promise((resolve, reject) => {
+          jf.writeFile(filename, data, {spaces: 2})
+          .then(() => {
+            console.log(`saveMember: ${filename} written`);
+            resolve(data.members[member.id]);
+          })
+          .catch(reason => {
+            console.log(`saveMember: error writing ${filename}`);
+            reject(reason);
+          });
+          // console.log(`saveMember: started writing ${filename}...`);
+        });
+        // console.log(`saveMember: returning saved member`);
+        return savedMember;
+      } else {
+        throw new Error("Member does not exist");
+      }
+    } finally {
+      // console.log("saveMember: unlocking in finally");
+      this._funlock();
+    }
+  },
+
+  deleteMember: async function (memberId) {
+    if (memberId === undefined) {
+      const err = "ERROR: attempt to delete member with undefined id";
+      console.log(err);
+      throw new Error(err);
+    }
+    if (!_.isString(memberId)) {
+      memberId = memberId.toString();
+    }
+    try {
+      console.log(`deleteMember: _initFile`);
+      let data = await this._initFile();
+      delete data.members[memberId];
+      const filename = this.filename;
+      const id = await new Promise((resolve, reject) => {
+        jf.writeFile(filename, data, {spaces: 2})
+        .then(() => {
+          console.log(`deleteMember: ${filename} written`);
+          resolve(memberId);
+        })
+        .catch(reason => {
+          console.log(`deleteMember: error writing ${filename}`);
+          reject(reason);
+        });
+        console.log(`deleteMember: started writing ${filename}...`);
+      });
+      console.log(`deleteMember: returning id ${id}`);
+      return id;
+    } finally {
+      console.log("deleteMember: unlocking in finally");
       this._funlock();
     }
   },

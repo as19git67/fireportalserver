@@ -1314,6 +1314,127 @@ module.exports = function (app) {
   });
 
 
+  router.options('/members', CORS(corsOptions)); // enable pre-flight
+
+  // perms needed: isAdmin || isGroupAdmin
+  router.get('/members', CORS(corsOptions), authenticate, Right('admin', 'groupadmin'), function (req, res, next) {
+    new Staff().getMembersList()
+    .then(members => {
+      res.json(members);
+    })
+    .catch(reason => {
+      console.log(`ERROR retrieving members: ${reason}`);
+      res.status(500).end();
+    });
+  });
+
+  router.options('/members/:id', CORS(corsOptions)); // enable pre-flight
+
+  /* add a new member */
+  // perms needed: isAdmin || isGroupAdmin
+  router.post('/members', CORS(corsOptions), authenticate, Right('admin', 'groupadmin'), function (req, res, next) {
+
+    if (!req.is('json')) {
+      console.log("ERROR adding new member: request body must be json");
+      res.status(500);
+      res.send('Error while adding new member data');
+      return;
+    }
+    const member = {
+      id: req.body.id,
+      lastname: req.body.lastname,
+      firstname: req.body.firstname,
+      mobile: req.body.mobile,
+      email: req.body.email,
+    };
+
+    const staff = new Staff();
+    staff.addMember(member.id, member.lastname, member.firstname, member.mobile, member.email).then(addedMember => {
+      req.app.get('backupStaff')(staff); // backup staff
+      res.json({
+        id: addedMember.id,
+        lastname: addedMember.lastname,
+        firstname: addedMember.firstname,
+        mobile: addedMember.mobile,
+        email: addedMember.email,
+      });
+
+      // notify all clients
+      const wss = req.app.get('wss');
+      if (wss) {
+        wss.clients.forEach(function each(client) {
+          if (client.readyState === WebSocket.OPEN) {
+            console.log(`Sending push to client ${client._socket.remoteAddress}`);
+            client.send(`newMember:${addedMember.id}`);
+          }
+        });
+      }
+    }).catch(reason => {
+      console.log("ERROR adding new member: ", reason);
+      res.status(500);
+      res.send('Error while adding new member data');
+    });
+
+  });
+
+  /* update a member */
+  // perms needed: isAdmin || isGroupAdmin
+  router.put('/members/:id', CORS(corsOptions), authenticate, Right('admin', 'groupadmin'), function (req, res, next) {
+    const id = req.params.id;
+    let staff = new Staff();
+    staff.getMembers()
+    .then(members => {
+      let member = members[id];
+      if (member) {
+
+        let newMemberData = _.pick(req.body, 'id', 'lastname', 'firstname', 'mobile', 'email');
+        let updateMember = _.extend(member, newMemberData);
+
+        staff.saveMember(updateMember)
+        .then(savedMember => {
+          res.json(savedMember);
+        })
+        .catch(reason => {
+          console.log(`ERROR retrieving member with id ${id}: ${reason}`);
+          res.status(500).end();
+        });
+      } else {
+        res.status(404).end();
+      }
+    })
+    .catch(reason => {
+      console.log(`ERROR retrieving member with id ${id}: ${reason}`);
+      res.status(500).end();
+    });
+  });
+
+  /* delete a member */
+  // perms needed: isAdmin || isGroupAdmin
+  router.delete('/members/:id', CORS(corsOptions), authenticate, Right('admin', 'groupadmin'), function (req, res, next) {
+    const id = req.params.id;
+    let staff = new Staff();
+    staff.getGroups()
+    .then(groups => {
+      if (groups[id]) {
+        staff.deleteGroup(id)
+        .then(() => {
+          res.end();
+        })
+        .catch(reason => {
+          console.log(`ERROR deleting Group with id ${id}: ${reason}`);
+          res.status(500).end();
+        });
+      } else {
+        res.status(404).end();
+      }
+    })
+    .catch(reason => {
+      console.log(`ERROR reading groups: ${reason}`);
+      res.status(500).end();
+    });
+  });
+
+
   function _pushUpdate(req, message) {
     const wss = req.app.get('wss');
     if (wss) {
