@@ -356,52 +356,75 @@ _.extend(Staff.prototype, {
     }
   },
 
-  _addMember: async function (id, lastname, firstname, mobile, email) {
-    try {
-      console.log(`_addMember: _initFile`);
-      let data = await this._initFile();
+  /* adds new members */
+  addMembers: async function (members) {
+    if (_.isArray(members)) {
+      try {
+        console.log(`_addMember: _initFile`);
+        let data = await this._initFile();
 
-      if (data.members[id]) {
-        throw new Error(`Member with id ${id} already exists`);
-      }
-      const member = {
-        id: id,
-        lastname: lastname,
-        firstname: firstname,
-        mobile: mobile,
-        email: email
-      };
+        if (data.members) {
+          // pre-check given values
+          for (const member of members) {
+            if (member.id > 0) {
+              if (data.members[member.id]) {
+                throw new Error(`Member with id ${member.id} already exists`);
+              }
+            }
+          }
+        } else {
+          data.members = {};
+        }
 
-      data.members[id] = member;
-
-      const filename = this.filename;
-      const addedMember = await new Promise((resolve, reject) => {
-        jf.writeFile(filename, data, {spaces: 2})
-        .then(() => {
-          console.log(`_addMember: ${filename} written`);
-          resolve(member);
-        })
-        .catch(reason => {
-          console.log(`_addMember: error writing ${filename}`);
-          reject(reason);
+        let addedMembers = [];
+        for (const member of members) {
+          if (member.id === undefined || member.id < 0) {
+            const memberSortedById = _.sortBy(data.members, 'id')
+            const memberWithMaxId = _.last(memberSortedById)
+            if (memberWithMaxId === undefined) {
+              member.id = 1;
+            } else {
+              member.id = memberWithMaxId.id + 1;
+            }
+            if (data.members[member.id]) {
+              throw new Error(`Member with id ${member.id} already exists`);
+            }
+          }
+          if (member.lastname && member.firstname) {
+            const memberToAdd = {
+              id: member.id,
+              lastname: member.lastname,
+              firstname: member.firstname,
+              mobile: member.mobile,
+              email: member.email
+            };
+            data.members[member.id] = memberToAdd;
+            addedMembers.push(memberToAdd);
+          } else {
+            throw new Error("member id, lastname or firstname is undefined");
+          }
+        }
+        const filename = this.filename;
+        await new Promise((resolve, reject) => {
+          jf.writeFile(filename, data, {spaces: 2})
+          .then(() => {
+            console.log(`_addMember: ${filename} written`);
+            resolve();
+          })
+          .catch(reason => {
+            console.log(`_addMember: error writing ${filename}`);
+            reject(reason);
+          });
+          console.log(`_addMember: started writing ${filename}`);
         });
-        console.log(`_addMember: started writing ${filename}`);
-      });
-      console.log(`_addMember: returning added member`);
-      return addedMember;
-    } finally {
-      console.log(`_addMember: unlocking - finally`);
-      this._funlock();
-    }
-  },
-
-  /* adds a new member */
-  addMember: async function (id, lastname, firstname, mobile, email) {
-    if (id && lastname && firstname) {
-      let addedMember = await this._addMember(id, lastname, firstname, mobile, email);
-      return addedMember;
+        console.log(`_addMember: returning added member`);
+        return addedMembers;
+      } finally {
+        console.log(`_addMember: unlocking - finally`);
+        this._funlock();
+      }
     } else {
-      throw new Error("member id, lastname or firstname is undefined");
+      throw new Error('members argument must be array');
     }
   },
 

@@ -1330,7 +1330,7 @@ module.exports = function (app) {
 
   router.options('/members/:id', CORS(corsOptions)); // enable pre-flight
 
-  /* add a new member */
+  /* add one or multiple new member */
   // perms needed: isAdmin || isGroupAdmin
   router.post('/members', CORS(corsOptions), authenticate, Right('admin', 'groupadmin'), function (req, res, next) {
 
@@ -1340,40 +1340,36 @@ module.exports = function (app) {
       res.send('Error while adding new member data');
       return;
     }
-    const member = {
-      id: req.body.id,
-      lastname: req.body.lastname,
-      firstname: req.body.firstname,
-      mobile: req.body.mobile,
-      email: req.body.email,
-    };
+    const members = req.body.members;
+    if (_.isArray(members)) {
+      const staff = new Staff();
+      staff.addMembers(members).then(addedMembers => {
+        req.app.get('backupStaff')(staff); // backup staff
+        res.json(addedMembers);
 
-    const staff = new Staff();
-    staff.addMember(member.id, member.lastname, member.firstname, member.mobile, member.email).then(addedMember => {
-      req.app.get('backupStaff')(staff); // backup staff
-      res.json({
-        id: addedMember.id,
-        lastname: addedMember.lastname,
-        firstname: addedMember.firstname,
-        mobile: addedMember.mobile,
-        email: addedMember.email,
+        // notify all clients
+        const wss = req.app.get('wss');
+        if (wss) {
+          wss.clients.forEach(function each(client) {
+            if (client.readyState === WebSocket.OPEN) {
+              console.log(`Sending push to client ${client._socket.remoteAddress}`);
+              const memberIds = _.map(addedMembers, member => {
+                return member.id;
+              })
+              client.send(`newMembers:${JSON.stringify(memberIds)}`);
+            }
+          });
+        }
+      }).catch(reason => {
+        console.log("ERROR adding new member: ", reason);
+        res.status(500);
+        res.send('Error while adding new member data');
       });
 
-      // notify all clients
-      const wss = req.app.get('wss');
-      if (wss) {
-        wss.clients.forEach(function each(client) {
-          if (client.readyState === WebSocket.OPEN) {
-            console.log(`Sending push to client ${client._socket.remoteAddress}`);
-            client.send(`newMember:${addedMember.id}`);
-          }
-        });
-      }
-    }).catch(reason => {
-      console.log("ERROR adding new member: ", reason);
+    } else {
       res.status(500);
-      res.send('Error while adding new member data');
-    });
+      res.send('Error while adding new member data. Must be array.');
+    }
 
   });
 
