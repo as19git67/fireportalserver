@@ -111,6 +111,22 @@ _.extend(Staff.prototype, {
     });
   },
 
+  existsGroup: async function (id) {
+    try {
+      console.log(`_addGroup: _initFile`);
+      let data = await this._initFile();
+
+      if (data.groups[id]) {
+        return true;
+      } else {
+        return false;
+      }
+    } finally {
+      console.log(`existsGroup: unlocking - finally`);
+      this._funlock();
+    }
+  },
+
   _addGroup: async function (id, name, description, responsibleEmail) {
     try {
       console.log(`_addGroup: _initFile`);

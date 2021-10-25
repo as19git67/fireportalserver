@@ -1228,6 +1228,12 @@ module.exports = function (app) {
     };
 
     const staff = new Staff();
+    if (staff.existsGroup(group.id)) {
+      console.log("ERROR adding new group: group with id " + group.id + " already exists");
+      res.status(400);
+      res.send('Gruppe mit gleicher Id existiert bereits.');
+      return;
+    }
     staff.addGroup(group.id, group.name, group.description, group.responsibleEmail).then(addedGroup => {
       req.app.get('backupStaff')(staff); // backup staff
       res.json({
