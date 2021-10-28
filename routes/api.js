@@ -1222,9 +1222,10 @@ module.exports = function (app) {
     }
     const group = {
       id: req.body.id,
-      name: req.body.name,
       description: req.body.description,
-      responsibleEmail: req.body.responsibleEmail
+      responsibleEmail: req.body.responsibleEmail,
+      senderEmail: req.body.senderEmail,
+      senderSMS: req.body.senderSMS,
     };
 
     const staff = new Staff();
@@ -1234,13 +1235,14 @@ module.exports = function (app) {
       res.send('Gruppe mit gleicher Id existiert bereits.');
       return;
     }
-    staff.addGroup(group.id, group.name, group.description, group.responsibleEmail).then(addedGroup => {
+    staff.addGroup(group.id, group.description, group.responsibleEmail, group.senderEmail, group.senderSMS).then(addedGroup => {
       req.app.get('backupStaff')(staff); // backup staff
       res.json({
         id: addedGroup.id,
-        name: addedGroup.name,
         description: addedGroup.description,
-        responsibleEmail: addedGroup.responsibleEmail
+        responsibleEmail: addedGroup.responsibleEmail,
+        senderEmail: addedGroup.senderEmail,
+        senderSMS: addedGroup.senderSMS,
       });
 
       // notify all clients
@@ -1271,7 +1273,7 @@ module.exports = function (app) {
       let group = groups[id];
       if (group) {
 
-        let newGroupData = _.pick(req.body, 'id', 'name', 'description', 'responsibleEmail');
+        let newGroupData = _.pick(req.body, 'id', 'description', 'responsibleEmail', 'senderEmail', 'senderSMS');
 
         let updateGroup = _.extend(group, newGroupData);
 

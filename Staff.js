@@ -127,7 +127,7 @@ _.extend(Staff.prototype, {
     }
   },
 
-  _addGroup: async function (id, name, description, responsibleEmail) {
+  _addGroup: async function (id, description, responsibleEmail, senderEmail, senderSMS) {
     try {
       console.log(`_addGroup: _initFile`);
       let data = await this._initFile();
@@ -137,9 +137,10 @@ _.extend(Staff.prototype, {
       }
       const group = {
         id: id,
-        name: name,
         description: description,
-        responsibleEmail: responsibleEmail
+        responsibleEmail: responsibleEmail,
+        senderEmail: senderEmail,
+        senderSMS: senderSMS
       };
 
       data.groups[id] = group;
@@ -166,9 +167,9 @@ _.extend(Staff.prototype, {
   },
 
   /* adds a new group */
-  addGroup: async function (id, name, description, responsibleEmail) {
+  addGroup: async function (id, description, responsibleEmail, senderEmail, senderSMS) {
     if (id && name) {
-      let addedGroup = await this._addGroup(id, name, description, responsibleEmail);
+      let addedGroup = await this._addGroup(id, description, responsibleEmail, senderEmail, senderSMS);
       return addedGroup;
     } else {
       throw new Error("group id or name is undefined");
@@ -187,7 +188,9 @@ _.extend(Staff.prototype, {
       let data = await this._initFile();
 
       if (data.groups[group.id]) {
-        _.extend(data.groups[group.id], _.pick(group, 'name', 'description', 'responsibleEmail'));
+        // take values from group and fill undefined from existing group data
+        data.groups[group.id] = _.defaults(_.pick(group, 'id', 'description', 'responsibleEmail', 'senderEmail', 'senderSMS'),
+          _.pick(data.groups[group.id], 'id', 'description', 'responsibleEmail', 'senderEmail', 'senderSMS'));
         const filename = this.filename;
         let savedGroup = await new Promise((resolve, reject) => {
           jf.writeFile(filename, data, {spaces: 2})
