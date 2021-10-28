@@ -168,7 +168,7 @@ _.extend(Staff.prototype, {
 
   /* adds a new group */
   addGroup: async function (id, description, responsibleEmail, senderEmail, senderSMS) {
-    if (id && name) {
+    if (id) {
       let addedGroup = await this._addGroup(id, description, responsibleEmail, senderEmail, senderSMS);
       return addedGroup;
     } else {

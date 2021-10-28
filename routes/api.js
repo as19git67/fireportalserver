@@ -1229,38 +1229,40 @@ module.exports = function (app) {
     };
 
     const staff = new Staff();
-    if (staff.existsGroup(group.id)) {
-      console.log("ERROR adding new group: group with id " + group.id + " already exists");
-      res.status(400);
-      res.send('Gruppe mit gleicher Id existiert bereits.');
-      return;
-    }
-    staff.addGroup(group.id, group.description, group.responsibleEmail, group.senderEmail, group.senderSMS).then(addedGroup => {
-      req.app.get('backupStaff')(staff); // backup staff
-      res.json({
-        id: addedGroup.id,
-        description: addedGroup.description,
-        responsibleEmail: addedGroup.responsibleEmail,
-        senderEmail: addedGroup.senderEmail,
-        senderSMS: addedGroup.senderSMS,
+    staff.existsGroup(group.id).then(exists => {
+      if (exists) {
+        console.log("ERROR adding new group: group with id " + group.id + " already exists");
+        res.status(400);
+        res.send('Gruppe mit gleicher Id existiert bereits.');
+        return;
+      }
+      staff.addGroup(group.id, group.description, group.responsibleEmail, group.senderEmail, group.senderSMS).then(addedGroup => {
+        req.app.get('backupStaff')(staff); // backup staff
+        res.json({
+          id: addedGroup.id,
+          description: addedGroup.description,
+          responsibleEmail: addedGroup.responsibleEmail,
+          senderEmail: addedGroup.senderEmail,
+          senderSMS: addedGroup.senderSMS,
+        });
+
+        // notify all clients
+        const wss = req.app.get('wss');
+        if (wss) {
+          wss.clients.forEach(function each(client) {
+            if (client.readyState === WebSocket.OPEN) {
+              console.log(`Sending push to client ${client._socket.remoteAddress}`);
+              client.send(`newGroup:${addedGroup.id}`);
+            }
+          });
+        }
+      }).catch(reason => {
+        console.log("ERROR adding new group: ", reason);
+        res.status(500);
+        res.send('Error while adding new group data');
       });
 
-      // notify all clients
-      const wss = req.app.get('wss');
-      if (wss) {
-        wss.clients.forEach(function each(client) {
-          if (client.readyState === WebSocket.OPEN) {
-            console.log(`Sending push to client ${client._socket.remoteAddress}`);
-            client.send(`newGroup:${addedGroup.id}`);
-          }
-        });
-      }
-    }).catch(reason => {
-      console.log("ERROR adding new group: ", reason);
-      res.status(500);
-      res.send('Error while adding new group data');
     });
-
   });
 
   /* update a group */
