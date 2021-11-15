@@ -85,7 +85,7 @@ function watchForConfigChange(cfgFilepath) {
 }
 
 nconf.defaults({
-  "httpPort": 5005,
+  "httpPort": 8080,
   "certPath": "",
   "keyFilename": "key.pem",
   "certFilename": "cert.pem",
