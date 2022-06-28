@@ -15,6 +15,7 @@ const Staff = require('../Staff');
 const Material = require('../Material');
 const WebSocket = require('ws');
 const forge = require('node-forge');
+const ReportPdf = require('../reportPdf');
 
 module.exports = function (app) {
   let corsOptions = {
@@ -23,12 +24,12 @@ module.exports = function (app) {
 
   // store a debounced function to perform backup of jobs.json (only encrypted entries)
   app.set('backupJobs',
-      _.debounce(function (jobs) {
-        if (!(jobs instanceof Jobs)) {
-          jobs = new Jobs();
-        }
-        jobs.backupJobs();
-      }, 1000 * 60 * 10)
+    _.debounce(function (jobs) {
+      if (!(jobs instanceof Jobs)) {
+        jobs = new Jobs();
+      }
+      jobs.backupJobs();
+    }, 1000 * 60 * 10)
   );
 
   // allow cors only when in development environment
@@ -91,13 +92,13 @@ module.exports = function (app) {
   // perms needed: canRead
   router.get('/materialmeta', CORS(corsOptions), authenticate, Right('read'), function (req, res, next) {
     new Material().getMeta()
-        .then(meta => {
-          res.json(meta);
-        })
-        .catch(reason => {
-          console.log("ERROR getting meta: ", reason);
-          res.status(500).end();
-        });
+      .then(meta => {
+        res.json(meta);
+      })
+      .catch(reason => {
+        console.log("ERROR getting meta: ", reason);
+        res.status(500).end();
+      });
   });
 
   router.options('/materialtypes', CORS(corsOptions)); // enable pre-flight
@@ -106,13 +107,13 @@ module.exports = function (app) {
   // perms needed: canRead
   router.get('/materialtypes', CORS(corsOptions), authenticate, Right('read'), function (req, res, next) {
     new Material().getTypes()
-        .then(materialTypes => {
-          res.json(materialTypes);
-        })
-        .catch(reason => {
-          console.log("ERROR getting materialTypes: ", reason);
-          res.status(500).end();
-        });
+      .then(materialTypes => {
+        res.json(materialTypes);
+      })
+      .catch(reason => {
+        console.log("ERROR getting materialTypes: ", reason);
+        res.status(500).end();
+      });
   });
 
   router.options('/staff', CORS(corsOptions)); // enable pre-flight
@@ -122,14 +123,48 @@ module.exports = function (app) {
   router.get('/staff', CORS(corsOptions), authenticate, Right('read'), function (req, res, next) {
     const groupId = "21204";
     new Staff().getAll(groupId)
-        .then(staff => {
-          res.json(staff);
-        })
-        .catch(reason => {
-          console.log("ERROR getting staff: ", reason);
-          res.status(500).end();
-        });
+      .then(staff => {
+        res.json(staff);
+      })
+      .catch(reason => {
+        console.log("ERROR getting staff: ", reason);
+        res.status(500).end();
+      });
   });
+
+  router.options('/report', CORS(corsOptions)); // enable pre-flight
+
+  /* create/print a report */
+  // perms needed: read access
+  router.post('/report', CORS(corsOptions), authenticate, Right('read'), function (req, res, next) {
+    new Promise(async (resolve, reject) => {
+      try {
+        const groupId = "21204";
+        const persons = await new Staff().getAll(groupId);
+        const reportAsPdf = await ReportPdf.create({}, persons);
+        console.log("Report with list of persons as PDF generated.");
+        resolve(reportAsPdf);
+      } catch (ex) {
+        console.log("ERROR while creating report PDF: ", ex);
+        reject(ex);
+      }
+    })
+      .then((reportAsPdf) => {
+        const fullFilepath = '/tmp/reportEmpty.pdf';
+        fs.writeFile(fullFilepath, data, function (err) {
+          if (err) {
+            console.log("Error writing fullFilepath: ", err);
+          } else {
+            console.log(fullFilepath + " stored for debugging purposes");
+          }
+        });
+        res.status(200).end();
+      })
+      .catch((reason) => {
+        res.status(500).end();
+      });
+  });
+
 
   router.options('/jobs', CORS(corsOptions)); // enable pre-flight
 
@@ -138,13 +173,13 @@ module.exports = function (app) {
   router.get('/jobs', CORS(corsOptions), authenticate, Right('read'), function (req, res, next) {
     const withImages = !!req.query.withImages;
     new Jobs().getAll({withImages: withImages})
-        .then(jobs => {
-          res.json(jobs);
-        })
-        .catch(reason => {
-          console.log("ERROR getting jobs: ", reason);
-          res.status(500).end();
-        });
+      .then(jobs => {
+        res.json(jobs);
+      })
+      .catch(reason => {
+        console.log("ERROR getting jobs: ", reason);
+        res.status(500).end();
+      });
   });
 
   router.options('/jobs/:id', CORS(corsOptions)); // enable pre-flight
@@ -163,61 +198,61 @@ module.exports = function (app) {
       const withImages = !!req.query.withImages;
       if (passphrase && keyName) {
         new Users().getPrivateKey(username, passphrase)
-            .then(keyObj => {
-              if (keyName === keyObj.encryptionKeyName) {
-                if (keyObj.encryptedPrivateKey && keyObj.passphrase) {
-                  let privateKey;
-                  // check passphrase before trying to decrypt to get a better error message in case the passphrase is wrong
-                  const pki = forge.pki;
-                  let keyBuf = Buffer.from(keyObj.encryptedPrivateKey);
+          .then(keyObj => {
+            if (keyName === keyObj.encryptionKeyName) {
+              if (keyObj.encryptedPrivateKey && keyObj.passphrase) {
+                let privateKey;
+                // check passphrase before trying to decrypt to get a better error message in case the passphrase is wrong
+                const pki = forge.pki;
+                let keyBuf = Buffer.from(keyObj.encryptedPrivateKey);
 
-                  try {
-                    privateKey = pki.decryptRsaPrivateKey(keyBuf, keyObj.passphrase);
-                  } catch (ex) {
-                    // assume if decryptRsaPrivateKey fails that the password is wrong -> privateKey stays empty -> wrong password
-                  }
-                  if (privateKey) {
-                    // passphrase was ok ...
-                    console.log(`Decrypting job ${jobId} by user ${username}...`);
-                    new Jobs().getJobById(jobId, keyObj)
-                        .then(decryptedJob => {
-                          if (decryptedJob && !withImages) {
-                            delete decryptedJob.images;
-                          }
-                          res.json(decryptedJob);
-                        })
-                        .catch(reason => {
-                          console.log(`ERROR decrypting job with id ${jobId} using key ${keyName}: `, reason);
-                          res.status(500).end();
-                        });
-                  } else {
-                    res.status(403).send('Das Passwort ist falsch');
-                  }
+                try {
+                  privateKey = pki.decryptRsaPrivateKey(keyBuf, keyObj.passphrase);
+                } catch (ex) {
+                  // assume if decryptRsaPrivateKey fails that the password is wrong -> privateKey stays empty -> wrong password
+                }
+                if (privateKey) {
+                  // passphrase was ok ...
+                  console.log(`Decrypting job ${jobId} by user ${username}...`);
+                  new Jobs().getJobById(jobId, keyObj)
+                    .then(decryptedJob => {
+                      if (decryptedJob && !withImages) {
+                        delete decryptedJob.images;
+                      }
+                      res.json(decryptedJob);
+                    })
+                    .catch(reason => {
+                      console.log(`ERROR decrypting job with id ${jobId} using key ${keyName}: `, reason);
+                      res.status(500).end();
+                    });
                 } else {
-                  console.log("encryptedPrivateKey or passphrase missing in keyObj");
-                  res.status(400).end();
+                  res.status(403).send('Das Passwort ist falsch');
                 }
               } else {
-                console.log("Name of users key differs from given key name: " + keyName);
+                console.log("encryptedPrivateKey or passphrase missing in keyObj");
                 res.status(400).end();
               }
-            })
-            .catch(reason => {
-              console.log("ERROR getting private key " + keyName + ": ", reason);
-              res.status(500).end();
-            });
+            } else {
+              console.log("Name of users key differs from given key name: " + keyName);
+              res.status(400).end();
+            }
+          })
+          .catch(reason => {
+            console.log("ERROR getting private key " + keyName + ": ", reason);
+            res.status(500).end();
+          });
       } else {
         new Jobs().getJobById(jobId)
-            .then(job => {
-              if (job && !withImages) {
-                delete job.images;
-              }
-              res.json(job);
-            })
-            .catch(reason => {
-              console.log("ERROR getting job " + jobId + ": ", reason);
-              res.status(500).end();
-            });
+          .then(job => {
+            if (job && !withImages) {
+              delete job.images;
+            }
+            res.json(job);
+          })
+          .catch(reason => {
+            console.log("ERROR getting job " + jobId + ": ", reason);
+            res.status(500).end();
+          });
       }
     }
   });
@@ -309,26 +344,26 @@ module.exports = function (app) {
       if (req.body) {
         const jobId = req.params.id;
         updateJob(jobId, req)
-            .then(result => {
-              let updatedJob = result.updatedJob;
-              const decrypted = result.decrypted;
-              delete updatedJob.images; // send back job without image, because it does not get updated
-              res.json(updatedJob);
+          .then(result => {
+            let updatedJob = result.updatedJob;
+            const decrypted = result.decrypted;
+            delete updatedJob.images; // send back job without image, because it does not get updated
+            res.json(updatedJob);
 
-              setTimeout(function () {
-                // notify all clients
-                if (decrypted) {
-                  _pushUpdate(req, `decryptedJob:${jobId}`);
-                } else {
-                  _pushUpdate(req, `updatedJob:${jobId}`);
-                }
-              }, 1000);
-            })
-            .catch(reason => {
-              console.log(reason);
-              res.status(500);
-              res.send('Error while updating job');
-            });
+            setTimeout(function () {
+              // notify all clients
+              if (decrypted) {
+                _pushUpdate(req, `decryptedJob:${jobId}`);
+              } else {
+                _pushUpdate(req, `updatedJob:${jobId}`);
+              }
+            }, 1000);
+          })
+          .catch(reason => {
+            console.log(reason);
+            res.status(500);
+            res.send('Error while updating job');
+          });
       } else {
         res.status(400);
         res.end();
@@ -347,77 +382,77 @@ module.exports = function (app) {
       const jobId = req.params.id;
       let j = new Jobs();
       j.getJobById(jobId)
-          .then((job) => {
-            let accessGranted = false;
-            // check if job data was set and if it has, then require admin right for deletion
-            let reportEdited = !!_.find(_.keys(job.report), key => {
-              if (_.contains(reportAttributesExceptions, key)) {
-                return false; // don't check this attribute for any value
+        .then((job) => {
+          let accessGranted = false;
+          // check if job data was set and if it has, then require admin right for deletion
+          let reportEdited = !!_.find(_.keys(job.report), key => {
+            if (_.contains(reportAttributesExceptions, key)) {
+              return false; // don't check this attribute for any value
+            }
+            if (key === 'materialList') {
+              const matList = job.report[key];
+              if (!matList || !matList.length) {
+                return false; // ignore empty material list
               }
-              if (key === 'materialList') {
-                const matList = job.report[key];
-                if (!matList || !matList.length) {
-                  return false; // ignore empty material list
-                }
-              }
+            }
 
-              const attribute = job.report[key];
-              if (_.isString(attribute)) {
-                const num = parseFloat(attribute);
-                if (isNaN(num)) {
-                  return attribute.trim();
-                } else {
-                  return num;  // evaluates to false if 0
-                }
+            const attribute = job.report[key];
+            if (_.isString(attribute)) {
+              const num = parseFloat(attribute);
+              if (isNaN(num)) {
+                return attribute.trim();
               } else {
-                return attribute;
+                return num;  // evaluates to false if 0
               }
-            });
-            if (job.number || job.keyword || job.catchword || _.values(job.attendees).length || reportEdited) {
-              console.log(`job's number, keyword, catchword, etc are. not all empty. Admin rights required for deletion`);
-              let accessRights = req.user.accessRights;
-              if (accessRights) {
-                console.log(`Access rights of user ${req.user.name}: ${accessRights}`);
-                if (_.contains(accessRights, "read")) {
-                  let accessRights = req.user.accessRights;
-                  if (accessRights) {
-                    console.log(`Access rights of user ${req.user.name}: ${accessRights}`);
-                    if (_.contains(accessRights, "admin")) {
-                      console.log(`User ${req.user.name} has right 'admin' -> user can delete job`);
-                      accessGranted = true;
-                    }
+            } else {
+              return attribute;
+            }
+          });
+          if (job.number || job.keyword || job.catchword || _.values(job.attendees).length || reportEdited) {
+            console.log(`job's number, keyword, catchword, etc are. not all empty. Admin rights required for deletion`);
+            let accessRights = req.user.accessRights;
+            if (accessRights) {
+              console.log(`Access rights of user ${req.user.name}: ${accessRights}`);
+              if (_.contains(accessRights, "read")) {
+                let accessRights = req.user.accessRights;
+                if (accessRights) {
+                  console.log(`Access rights of user ${req.user.name}: ${accessRights}`);
+                  if (_.contains(accessRights, "admin")) {
+                    console.log(`User ${req.user.name} has right 'admin' -> user can delete job`);
+                    accessGranted = true;
                   }
                 }
-              } else {
-                console.log("Error: user object contains no accessRights");
-                res.status(500).end();
               }
             } else {
-              accessGranted = true;
+              console.log("Error: user object contains no accessRights");
+              res.status(500).end();
             }
+          } else {
+            accessGranted = true;
+          }
 
-            if (accessGranted) {
-              j.deleteJob(jobId)
-                  .then(() => {
-                    req.app.get('backupJobs')(j); // backup jobs
-                    res.end();
-                    _pushUpdate(req, `deletedJob:${jobId}`);
-                  })
-                  .catch(reason => {
-                    console.log(`ERROR deleting job with id: ${jobId}: ${reason}`);
-                    res.status(500);
-                    res.send('Error deleting job data');
-                  });
-            } else {
-              console.log(`User ${req.user.name} does not have required right to delete the job`);
-              res.status(403).end();
-            }
-          })
-          .catch(reason => {
-            console.log(`ERROR deleting job with id: ${jobId}: ${reason}`);
-            res.status(500);
-            res.send('Error deleting job');
-          });
+          if (accessGranted) {
+            j.deleteJob(jobId)
+              .then(() => {
+                req.app.get('backupJobs')(j); // backup jobs
+                res.end();
+                _pushUpdate(req, `deletedJob:${jobId}`);
+              })
+              .catch(reason => {
+                console.log(`ERROR deleting job with id: ${jobId}: ${reason}`);
+                res.status(500);
+                res.send('Error deleting job data');
+              });
+          } else {
+            console.log(`User ${req.user.name} does not have required right to delete the job`);
+            res.status(403).end();
+          }
+        })
+        .catch(reason => {
+          console.log(`ERROR deleting job with id: ${jobId}: ${reason}`);
+          res.status(500);
+          res.send('Error deleting job');
+        });
 
     }
   });
@@ -465,7 +500,9 @@ module.exports = function (app) {
     if (data.resource) {
       let value = _parseJsonArray(data.resource);
       if (_.isArray(value)) {
-        let resources = _.filter(value, function (o) { return o.indexOf('erching') > 1; });
+        let resources = _.filter(value, function (o) {
+          return o.indexOf('erching') > 1;
+        });
         return resources.join(', ');
       } else {
         return value;
@@ -479,7 +516,9 @@ module.exports = function (app) {
     if (data.resource) {
       let value = _parseJsonArray(data.resource);
       if (_.isArray(value)) {
-        let others = _.reject(value, function (o) { return o.indexOf('erching') > 0; });
+        let others = _.reject(value, function (o) {
+          return o.indexOf('erching') > 0;
+        });
         return others.join(', ');
       } else {
         return '';
@@ -537,7 +576,7 @@ module.exports = function (app) {
         resource: req.body.resource,
         plan: req.body.plan,
         report:
-            {}
+          {}
       };
       handlePostedJob();
     } else {
@@ -644,7 +683,9 @@ module.exports = function (app) {
           try {
             existingUser = await u.getUserByName(data.name);
           } catch (ex) {
-            reject({message: `ERROR while getting user with name ${data.name}: ${ex.message}`, status: 500, exception: ex});
+            reject({
+              message: `ERROR while getting user with name ${data.name}: ${ex.message}`, status: 500, exception: ex
+            });
             return;
           }
           if (existingUser === undefined || (existingUser && existingUser.state === 'new')) {
@@ -657,12 +698,15 @@ module.exports = function (app) {
               sendNextEmailNotBefore = moment();
               sendNextEmailNotBefore.add(1, 'minutes');
             } catch (ex) {
-              reject({message: `ERROR creating user with name ${data.name} and email ${data.email}: ${ex.message}`, status: 500, exception: ex});
+              reject({
+                message: `ERROR creating user with name ${data.name} and email ${data.email}: ${ex.message}`,
+                status: 500, exception: ex
+              });
               return;
             }
             try {
               await _sendVerificationEmail(data.email,
-                  `${req.headers.origin}/#/setupauth3?name=${data.name}&email=${data.email}&token=${user.accessToken}`);
+                `${req.headers.origin}/#/setupauth3?name=${data.name}&email=${data.email}&token=${user.accessToken}`);
 
               resolve();
 
@@ -724,7 +768,9 @@ module.exports = function (app) {
           try {
             existingUser = await u.getUserByName(data.name);
           } catch (ex) {
-            reject({message: `ERROR while getting user with name ${data.name}: ${ex.message}`, status: 500, exception: ex});
+            reject({
+              message: `ERROR while getting user with name ${data.name}: ${ex.message}`, status: 500, exception: ex
+            });
             return;
           }
           if (existingUser) {
@@ -744,7 +790,10 @@ module.exports = function (app) {
                   await u.saveUser(existingUser);
                   resolve(tokenData);
                 } catch (ex) {
-                  reject({message: `ERROR while saving user with name ${existingUser.name}: ${ex.message}`, status: 500, exception: ex});
+                  reject({
+                    message: `ERROR while saving user with name ${existingUser.name}: ${ex.message}`, status: 500,
+                    exception: ex
+                  });
                 }
               } else {
                 resolve(tokenData);
@@ -790,13 +839,13 @@ module.exports = function (app) {
       const name = req.user.name;
       console.log(`authwithtoken for user ${name}`);
       u.createAccessTokenForUser(name)
-          .then(result => {
-            res.json(result);
-          })
-          .catch(reason => {
-            console.error('creating access token failed: ', reason.message);
-            res.status(reason.status ? reason.status : 500).end();
-          });
+        .then(result => {
+          res.json(result);
+        })
+        .catch(reason => {
+          console.error('creating access token failed: ', reason.message);
+          res.status(reason.status ? reason.status : 500).end();
+        });
     } else {
       res.status(403).send('Not authenticated');
     }
@@ -815,13 +864,13 @@ module.exports = function (app) {
         if (user) {
           if (email === user.email && user.state === 'new') {
             u.getUserSecretByName(name, req.app.get('appName'))
-                .then(secret => {
-                  res.json(JSON.stringify(secret));
-                })
-                .catch(reason => {
-                  console.log(`ERROR retrieving user secret for ${name}: ${reason.message}`);
-                  res.status(reason.status ? reason.status : 500).end();
-                });
+              .then(secret => {
+                res.json(JSON.stringify(secret));
+              })
+              .catch(reason => {
+                console.log(`ERROR retrieving user secret for ${name}: ${reason.message}`);
+                res.status(reason.status ? reason.status : 500).end();
+              });
           } else {
             res.status(401).end();
           }
@@ -845,13 +894,13 @@ module.exports = function (app) {
       let u = new Users({tokenLifetimeInMinutes: config.get('tokenLifetimeInMinutes')});
       const name = req.user.name;
       u.refreshToken(name)
-          .then(result => {
-            res.json(result);
-          })
-          .catch(reason => {
-            console.error('Refreshing access token failed: ', reason);
-            res.status(reason.status ? reason.status : 500).end();
-          });
+        .then(result => {
+          res.json(result);
+        })
+        .catch(reason => {
+          console.error('Refreshing access token failed: ', reason);
+          res.status(reason.status ? reason.status : 500).end();
+        });
     } else {
       res.status(403).send('Not authenticated');
     }
@@ -862,13 +911,13 @@ module.exports = function (app) {
   // perms needed: isAdmin
   router.get('/users', CORS(corsOptions), authenticate, Right('admin'), function (req, res, next) {
     new Users().getAll()
-        .then(users => {
-          res.json(users);
-        })
-        .catch(reason => {
-          console.log(`ERROR retrieving users: ${reason}`);
-          res.status(500).end();
-        });
+      .then(users => {
+        res.json(users);
+      })
+      .catch(reason => {
+        console.log(`ERROR retrieving users: ${reason}`);
+        res.status(500).end();
+      });
   });
 
   router.options('/users/key', CORS(corsOptions)); // enable pre-flight
@@ -883,25 +932,25 @@ module.exports = function (app) {
     const u = new Users();
 
     u.getPrivateKey(username, passphrase)
-        .then(result => {
-          const encryptionKeyName = result.encryptionKeyName;
-          if (keyName === encryptionKeyName) {
-            const pki = forge.pki;
-            let keyBuf = Buffer.from(result.encryptedPrivateKey);
-            const privateKey = pki.decryptRsaPrivateKey(keyBuf, result.passphrase);
-            if (privateKey) {
-              res.json({encryptionKeyName: result.encryptionKeyName});
-            } else {
-              res.status(403).send('Das Passwort ist falsch');
-            }
+      .then(result => {
+        const encryptionKeyName = result.encryptionKeyName;
+        if (keyName === encryptionKeyName) {
+          const pki = forge.pki;
+          let keyBuf = Buffer.from(result.encryptedPrivateKey);
+          const privateKey = pki.decryptRsaPrivateKey(keyBuf, result.passphrase);
+          if (privateKey) {
+            res.json({encryptionKeyName: result.encryptionKeyName});
           } else {
-            res.status(404).send('Invalid keyname');
+            res.status(403).send('Das Passwort ist falsch');
           }
-        })
-        .catch(reason => {
-          res.status(500).end();
-          console.log(`Exception while verifying password: ${reason}`);
-        });
+        } else {
+          res.status(404).send('Invalid keyname');
+        }
+      })
+      .catch(reason => {
+        res.status(500).end();
+        console.log(`Exception while verifying password: ${reason}`);
+      });
   });
 
   /* add a new encryption key, which replaces any current encryption key - this can be done only, if no RSA keypair has been generated already*/
@@ -914,25 +963,25 @@ module.exports = function (app) {
 
     const u = new Users();
     u.createNewKeyPair(name, password)
-        .then(result => {
+      .then(result => {
 
-          // save public key in settings.json - everyone can see it
-          config.set('encryptionPublicKey', result.encryptionPublicKey);
-          config.set('encryptionKeyName', result.encryptionKeyName);
-          config.save(function (err) {
-            if (err) {
-              console.log(`Error saving RSA public key in config: ${err}`);
-              res.status(500).send('Saving the new RSA public key failed');
-            } else {
-              console.log(`New RSA public key created by user ${name}`);
-              res.json({encryptionKeyName: result.encryptionKeyName});
-            }
-          });
-        })
-        .catch(reason => {
-          res.status(500).end();
-          console.log(`Exception while creating RSA keypair: ${reason}`);
+        // save public key in settings.json - everyone can see it
+        config.set('encryptionPublicKey', result.encryptionPublicKey);
+        config.set('encryptionKeyName', result.encryptionKeyName);
+        config.save(function (err) {
+          if (err) {
+            console.log(`Error saving RSA public key in config: ${err}`);
+            res.status(500).send('Saving the new RSA public key failed');
+          } else {
+            console.log(`New RSA public key created by user ${name}`);
+            res.json({encryptionKeyName: result.encryptionKeyName});
+          }
         });
+      })
+      .catch(reason => {
+        res.status(500).end();
+        console.log(`Exception while creating RSA keypair: ${reason}`);
+      });
   });
 
   router.options('/user', CORS(corsOptions)); // enable pre-flight
@@ -948,17 +997,17 @@ module.exports = function (app) {
           console.log(`Reading user data of user ${req.user.name}`);
           const name = req.user.name;
           new Users().getUserByName(name)
-              .then(user => {
-                if (user) {
-                  res.json(user);
-                } else {
-                  res.status(404).end();
-                }
-              })
-              .catch(reason => {
-                console.log(`ERROR retrieving user with name ${name}: ${reason}`);
-                res.status(500).end();
-              });
+            .then(user => {
+              if (user) {
+                res.json(user);
+              } else {
+                res.status(404).end();
+              }
+            })
+            .catch(reason => {
+              console.log(`ERROR retrieving user with name ${name}: ${reason}`);
+              res.status(500).end();
+            });
 
         } else {
           console.log(`User ${req.user.name} does not have required right read`);
@@ -985,29 +1034,29 @@ module.exports = function (app) {
           console.log(`Reading user data of user ${req.user.name}`);
           const name = req.user.name;
           new Users().getUserByName(name)
-              .then(user => {
-                if (user) {
-                  let newUserData = _.pick(req.body, 'email');
+            .then(user => {
+              if (user) {
+                let newUserData = _.pick(req.body, 'email');
 
-                  let updateUser = _.extend(user, newUserData);
+                let updateUser = _.extend(user, newUserData);
 
-                  u.saveUser(updateUser)
-                      .then(savedUser => {
-                        // todo filter user data for attributes that can go over the wire
-                        res.json(savedUser);
-                      })
-                      .catch(reason => {
-                        console.log(`ERROR retrieving user with name ${name}: ${reason}`);
-                        res.status(500).end();
-                      });
-                } else {
-                  res.status(404).end();
-                }
-              })
-              .catch(reason => {
-                console.log(`ERROR retrieving user with name ${name}: ${reason}`);
-                res.status(500).end();
-              });
+                u.saveUser(updateUser)
+                  .then(savedUser => {
+                    // todo filter user data for attributes that can go over the wire
+                    res.json(savedUser);
+                  })
+                  .catch(reason => {
+                    console.log(`ERROR retrieving user with name ${name}: ${reason}`);
+                    res.status(500).end();
+                  });
+              } else {
+                res.status(404).end();
+              }
+            })
+            .catch(reason => {
+              console.log(`ERROR retrieving user with name ${name}: ${reason}`);
+              res.status(500).end();
+            });
 
         } else {
           console.log(`User ${req.user.name} does not have required right read`);
@@ -1030,17 +1079,17 @@ module.exports = function (app) {
 
     const name = req.params.name;
     new Users().getUserByName(name)
-        .then(user => {
-          if (user) {
-            res.json(user);
-          } else {
-            res.status(404).end();
-          }
-        })
-        .catch(reason => {
-          console.log(`ERROR retrieving user with name ${name}: ${reason}`);
-          res.status(500).end();
-        });
+      .then(user => {
+        if (user) {
+          res.json(user);
+        } else {
+          res.status(404).end();
+        }
+      })
+      .catch(reason => {
+        console.log(`ERROR retrieving user with name ${name}: ${reason}`);
+        res.status(500).end();
+      });
   });
 
   // perms needed: isAdmin
@@ -1048,36 +1097,36 @@ module.exports = function (app) {
     const name = req.params.name;
     let u = new Users();
     u.getUserByName(name)
-        .then(user => {
-          if (user) {
-            let newUserData = _.pick(req.body, 'email', 'state', 'isAdmin', 'canRead', 'canWrite', 'isAutologin');
+      .then(user => {
+        if (user) {
+          let newUserData = _.pick(req.body, 'email', 'state', 'isAdmin', 'canRead', 'canWrite', 'isAutologin');
 
-            if (req.user.name === name) { // modifying own user data?
-              if (user.isAdmin && newUserData.isAdmin !== undefined && !newUserData.isAdmin) {
-                res.status(423).send("Can't set self to non administrator");
-                return;
-              }
+          if (req.user.name === name) { // modifying own user data?
+            if (user.isAdmin && newUserData.isAdmin !== undefined && !newUserData.isAdmin) {
+              res.status(423).send("Can't set self to non administrator");
+              return;
             }
-
-            let updateUser = _.extend(user, newUserData);
-
-            u.saveUser(updateUser)
-                .then(savedUser => {
-                  // todo filter user data for attributes that can go over the wire
-                  res.json(savedUser);
-                })
-                .catch(reason => {
-                  console.log(`ERROR retrieving user with name ${name}: ${reason}`);
-                  res.status(500).end();
-                });
-          } else {
-            res.status(404).end();
           }
-        })
-        .catch(reason => {
-          console.log(`ERROR retrieving user with name ${name}: ${reason}`);
-          res.status(500).end();
-        });
+
+          let updateUser = _.extend(user, newUserData);
+
+          u.saveUser(updateUser)
+            .then(savedUser => {
+              // todo filter user data for attributes that can go over the wire
+              res.json(savedUser);
+            })
+            .catch(reason => {
+              console.log(`ERROR retrieving user with name ${name}: ${reason}`);
+              res.status(500).end();
+            });
+        } else {
+          res.status(404).end();
+        }
+      })
+      .catch(reason => {
+        console.log(`ERROR retrieving user with name ${name}: ${reason}`);
+        res.status(500).end();
+      });
   });
 
   // perms needed: isAdmin
@@ -1088,24 +1137,24 @@ module.exports = function (app) {
     }
     let u = new Users();
     u.getUserByName(name)
-        .then(user => {
-          if (user) {
-            u.deleteUser(user.name)
-                .then(() => {
-                  res.end();
-                })
-                .catch(reason => {
-                  console.log(`ERROR deleting user with name ${name}: ${reason}`);
-                  res.status(500).end();
-                });
-          } else {
-            res.status(404).end();
-          }
-        })
-        .catch(reason => {
-          console.log(`ERROR retrieving user with name ${name}: ${reason}`);
-          res.status(500).end();
-        });
+      .then(user => {
+        if (user) {
+          u.deleteUser(user.name)
+            .then(() => {
+              res.end();
+            })
+            .catch(reason => {
+              console.log(`ERROR deleting user with name ${name}: ${reason}`);
+              res.status(500).end();
+            });
+        } else {
+          res.status(404).end();
+        }
+      })
+      .catch(reason => {
+        console.log(`ERROR retrieving user with name ${name}: ${reason}`);
+        res.status(500).end();
+      });
   });
 
   router.options('/user/:name/key', CORS(corsOptions)); // enable pre-flight
@@ -1127,13 +1176,13 @@ module.exports = function (app) {
 
     const u = new Users();
     u.migratePrivateKey(sourceUsername, sourcePrivateKeyPassword, sourceKeyname, targetUsername, targetPrivateKeyPassword)
-        .then(() => {
-          res.json({encryptionKeyName: sourceKeyname});
-        })
-        .catch(reason => {
-          res.status(500).end();
-          console.log(`Exception while sharing private decryption key: ${reason}`);
-        });
+      .then(() => {
+        res.json({encryptionKeyName: sourceKeyname});
+      })
+      .catch(reason => {
+        res.status(500).end();
+        console.log(`Exception while sharing private decryption key: ${reason}`);
+      });
   });
 
   /* deletes the private decryption key for another user */
@@ -1150,13 +1199,13 @@ module.exports = function (app) {
 
     const u = new Users();
     u.deletePrivateKey(targetUsername, encryptionKeyName)
-        .then(() => {
-          res.end();
-        })
-        .catch(reason => {
-          res.status(500).end();
-          console.log('Exception while deleting private decryption key.', reason);
-        });
+      .then(() => {
+        res.end();
+      })
+      .catch(reason => {
+        res.status(500).end();
+        console.log('Exception while deleting private decryption key.', reason);
+      });
   });
 
   function _pushUpdate(req, message) {
