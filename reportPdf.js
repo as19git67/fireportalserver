@@ -115,14 +115,16 @@ ReportPDF.prototype._addFirstPage = function (data) {
     }
   }
 
-  let meldungDoc = {
-    stack: [{stack: [{text: 'Alarmbild:'}]}, {
-      canvas: [{
-        type: 'line', x1: indentX1, y1: 0, x2: this.rightX, y2: 0
-      }]
-    }],
-    margin: [0, 0, 0, 20]
-  };
+  let meldungDoc = [
+    {
+      stack: [{stack: [{text: 'Alarmbild:'}]}, {
+        canvas: [{
+          type: 'line', x1: indentX1, y1: 0, x2: this.rightX, y2: 0
+        }]
+      }],
+      style: 'header2'
+    }
+  ];
   if (meldung) {
     meldungDoc = [
       {
@@ -181,8 +183,16 @@ ReportPDF.prototype._addFirstPage = function (data) {
 
   let pagetContent = [
     {
-      text: 'Einsatzbericht der Freiwilligen Feuerwehr Merching vom ' + moment(data.date).format('L'),
+      text: 'Einsatzbericht der Freiwilligen Feuerwehr Merching',
       style: 'header1'
+    },
+    {
+      stack: [{stack: [{text: 'Datum:'}]}, {
+        canvas: [{
+          type: 'line', x1: indentX1, y1: 0, x2: this.rightX, y2: 0
+        }]
+      }],
+      style: 'header2'
     },
     meldungDoc,
     einsatzortDoc,
@@ -313,7 +323,7 @@ ReportPDF.prototype._addSecondPage = function (persons) {
   for (let i = 0; i < cnt; i++) {
     let f = persons[i] ? persons[i].lastname + ', ' + persons[i].firstname : '';
     let r = persons[i + first.length] ? persons[i + first.length].lastname + ', ' + persons[i + first.length].firstname : '';
-    body.push(['[  ]', f, '', '', '[  ]', r, ''])
+    body.push(['[  ]', {text: f, fontSize: 10}, '', '', '[  ]', {text: r, fontSize: 10}, ''])
   }
 
   let pageContent = [

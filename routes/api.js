@@ -151,16 +151,15 @@ module.exports = function (app) {
     })
       .then((reportAsPdf) => {
         const fullFilepath = '/tmp/reportEmpty.pdf';
-        fs.writeFile(fullFilepath, data, function (err) {
-          if (err) {
-            console.log("Error writing fullFilepath: ", err);
-          } else {
-            console.log(fullFilepath + " stored for debugging purposes");
-          }
+        console.log(`Saving report to ${fullFilepath}`);
+        const stream = reportAsPdf.pipe(fs.createWriteStream(fullFilepath));
+        stream.on('finish', function() {
+          res.status(200).end();
         });
-        res.status(200).end();
       })
       .catch((reason) => {
+        console.log("Creating report failed:");
+        console.log(reason);
         res.status(500).end();
       });
   });
