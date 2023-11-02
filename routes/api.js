@@ -289,7 +289,12 @@ module.exports = function (app) {
         }
       } else {
         if (originalJob.encrypted) {
-          throw new Error("can't update encrypted job");
+          throw new Error("can't update encrypted job", { cause: 'encrypted' });
+        }
+        const changeNumber = data.changeNumber;
+        const savedChangeNumber = originalJob.changeNumber;
+        if (savedChangeNumber > changeNumber) {
+          throw new Error('job data is outdated. Not saved.', { cause: 'outdated' });
         }
 
         const levelOneKeysOfPossibleChanges = ['start', 'end', 'title', 'number', 'encrypted'];
@@ -325,6 +330,7 @@ module.exports = function (app) {
       }
       let jobToSave = _.extend(originalJob, newJobData);
       let updatedJob = await j.saveJob(jobToSave);
+      console.log(`job to save has changeNumber ${jobToSave.changeNumber}`);
       req.app.get('backupJobs')(j); // backup jobs
       return {updatedJob: updatedJob, decrypted: false};
     } finally {
@@ -358,10 +364,21 @@ module.exports = function (app) {
               }
             }, 1000);
           })
-          .catch(reason => {
-            console.log(reason);
-            res.status(500);
-            res.send('Error while updating job');
+          .catch(error => {
+            switch(error.cause) {
+              case 'outdated':
+                console.error(error.message);
+                res.send(409);  // conflict
+                break;
+              case 'encrypted':
+                console.error(error.message);
+                res.send(406);  // not acceptable
+                break;
+              default:
+                console.error(error);
+                res.status(500);
+                res.send('Error while updating job');
+            }
           });
       } else {
         res.status(400);

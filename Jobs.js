@@ -125,11 +125,14 @@ _.extend(Jobs.prototype, {
         if (job.encrypted && keyObj) {
           job = await this._decrypt(job, keyObj);
         }
-        let jobData = _.pick(job, 'id', 'encrypted', 'encryptedRandomBase64', 'encryptionRandomIvBase64', 'encryptedData', 'start', 'end',
+        let jobData = _.pick(job, 'id', 'changeNumber', 'encrypted', 'encryptedRandomBase64', 'encryptionRandomIvBase64', 'encryptedData', 'start', 'end',
             'title',
             'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city', 'object', 'resource', 'plan', 'images',
             'attendees', 'report');
         jobData.id = id;
+        if (!jobData.changeNumber) {
+          jobData.changeNumber = 1;
+        }
         // console.log(`getJobById: returning job ${id}`);
         return jobData;
       } else {
@@ -151,21 +154,24 @@ _.extend(Jobs.prototype, {
         let jobs = _.map(data.jobs, function (job, key) {
           let oneJob;
           if (options.withImages) {
-            oneJob = _.pick(job, 'encrypted', 'encryptedRandomBase64', 'encryptionRandomIvBase64', 'encryptedData', 'images', 'start', 'end',
+            oneJob = _.pick(job, 'changeNumber', 'encrypted', 'encryptedRandomBase64', 'encryptionRandomIvBase64', 'encryptedData', 'images', 'start', 'end',
                 'title', 'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city', 'object', 'resource',
                 'plan', 'attendees', 'report');
           } else {
             // without images means also without encrypted data in case the job is encrypted (image is in encrypted data)
             if (job.encrypted) {
-              oneJob = _.pick(job, 'encrypted', 'encryptedRandomBase64', 'encryptionRandomIvBase64', 'start', 'end', 'title', 'number',
+              oneJob = _.pick(job, 'changeNumber', 'encrypted', 'encryptedRandomBase64', 'encryptionRandomIvBase64', 'start', 'end', 'title', 'number',
                   'keyword', 'catchword', 'longitude', 'latitude', 'street', 'streetnumber', 'city', 'object', 'resource', 'plan',
                   'attendees', 'report');
             } else {
-              oneJob = _.pick(job, 'encrypted', 'start', 'end', 'title', 'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street',
+              oneJob = _.pick(job, 'changeNumber', 'encrypted', 'start', 'end', 'title', 'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street',
                   'streetnumber', 'city', 'object', 'resource', 'plan', 'attendees', 'report');
             }
           }
           oneJob.id = key;
+          if (!oneJob.changeNumber) {
+            oneJob.changeNumber = 1;
+          }
           return oneJob;
         });
         // console.log(`getAll: returning sorted jobs`);
@@ -193,6 +199,7 @@ _.extend(Jobs.prototype, {
       if (_.isObject(encrypted)) {
         let o = encrypted;
         job = {
+          changeNumber: 1,
           encrypted: o.encrypted,
           start: o.start,
           end: o.end,
@@ -214,6 +221,7 @@ _.extend(Jobs.prototype, {
         };
       } else {
         job = {
+          changeNumber: 1,
           encrypted: encrypted,
           start: start,
           end: end,
@@ -331,8 +339,19 @@ _.extend(Jobs.prototype, {
         if (data.jobs[job.id].encrypted) {
           throw new Error('job is encrypted');
         } else {
+          const changeNumber = job.changeNumber;
+          if (changeNumber) {
+            const savedChangeNumber = data.jobs[job.id].changeNumber;
+            if (savedChangeNumber && savedChangeNumber > changeNumber) {
+              throw new Error('job data is outdated. Not saved.');
+            } else {
+              job.changeNumber = changeNumber + 1;
+            }
+          } else {
+            throw new Error('job to save has no changeNumber. Not saved.');
+          }
           _.extend(data.jobs[job.id],
-              _.pick(job, 'encrypted', 'start', 'end', 'title', 'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street',
+              _.pick(job, 'changeNumber', 'encrypted', 'start', 'end', 'title', 'number', 'keyword', 'catchword', 'longitude', 'latitude', 'street',
                   'streetnumber', 'city',
                   'object', 'resource', 'plan', 'images', 'attendees', 'report'));
           const filename = this.filename;
