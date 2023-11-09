@@ -257,6 +257,10 @@ module.exports = function (app) {
   });
 
   async function updateJob(jobId, req) {
+    const reportKeysOfPossibleChanges = [
+      'incident', 'location', 'director', 'text', 'materialList', 'rescued', 'recovered', 'others', 'duration', 'staffcount',
+      'writer'
+    ];
     let newJobData;
     let data = req.body;
     let j = new Jobs();
@@ -299,10 +303,6 @@ module.exports = function (app) {
 
         const levelOneKeysOfPossibleChanges = ['start', 'end', 'title', 'number', 'encrypted'];
         const attendeesKeysOfPossibleChanges = ['id', 'lastname', 'firstname'];
-        const reportKeysOfPossibleChanges = [
-          'incident', 'location', 'director', 'text', 'materialList', 'rescued', 'recovered', 'others', 'duration', 'staffcount',
-          'writer'
-        ];
         const materialListKeysOfPossibleChanges = ['id', 'matId', 'name', 'category', 'values'];
         newJobData = _.pick(data, levelOneKeysOfPossibleChanges);
         if (data.attendees) {
@@ -329,6 +329,13 @@ module.exports = function (app) {
         }
       }
       let jobToSave = _.extend(originalJob, newJobData);
+      if (!jobToSave.encrypted) {
+        reportKeysOfPossibleChanges.forEach((key) => {
+          if (jobToSave.report[key] === '') {
+            delete jobToSave.report[key];
+          }
+        });
+      }
       let updatedJob = await j.saveJob(jobToSave);
       console.log(`job to save has changeNumber ${jobToSave.changeNumber}`);
       req.app.get('backupJobs')(j); // backup jobs
