@@ -1231,6 +1231,15 @@ module.exports = function (app) {
       });
   });
 
+  // https://github.com/jaredhanson/passport-webauthn
+
+  router.post('/login/public-key/challenge', function(req, res, next) {
+    store.challenge(req, function(err, challenge) {
+      if (err) { return next(err); }
+      res.json({ challenge: base64url.encode(challenge) });
+    });
+  });
+
   function _pushUpdate(req, message) {
     const wss = req.app.get('wss');
     if (wss) {

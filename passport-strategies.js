@@ -1,6 +1,8 @@
 const _ = require('underscore');
 const moment = require('moment');
 const BearerStrategy = require('passport-http-bearer').Strategy;
+const WebAuthnStrategy = require('passport-fido2-webauthn').Strategy;
+const SessionChallengeStore = require('passport-fido2-webauthn').SessionChallengeStore;
 const config = require('./config');
 const Users = require('./Users');
 
@@ -38,6 +40,30 @@ module.exports.init = function (passport, callback) {
           return done({message: 'invalid bearer token', status: 401});
         }
       }
+  ));
+
+  const public_key_credentials = {};
+  const store = new SessionChallengeStore();
+
+  passport.use(new WebAuthnStrategy({ store: store },
+    function verify(id, userHandle, cb) {
+      const row = public_key_credentials[id];
+      if (!row) {
+        return cb(null, false, {message: 'Invalid key. '});
+      }
+      const publicKey = row.public_key;
+      if (row.handle !== userHandle) {
+        return cb(null, false, { message: 'Invalid key - handle. '});
+      }
+      return cb(null, row, publicKey);
+    },
+    function register(user, id, publicKey, cb) {
+      public_key_credentials[id] = {
+        public_key: publicKey,
+        user: user,
+      }
+      return cb(null, user);
+    }
   ));
 
   if (_.isFunction(callback)) {
