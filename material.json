@@ -1,0 +1,377 @@
+{
+  "meta": {
+    "vehicle": [
+      {
+        "id": "driver",
+        "label": "Fahrer",
+        "type": "attendee"
+      },
+      {
+        "id": "groupleader",
+        "label": "Gruppenführer",
+        "type": "attendee"
+      },
+      {
+        "id": "kmStart",
+        "label": "km Stand Start",
+        "type": "float"
+      },
+      {
+        "id": "kmEnde",
+        "label": "km Stand Ende",
+        "type": "float"
+      }
+    ],
+    "boat": [
+      {
+        "id": "coxswain",
+        "label": "Bootsführer",
+        "type": "attendee"
+      }
+    ],
+    "breathingProtection": [
+      {
+        "id": "person",
+        "label": "Träger",
+        "type": "attendee"
+      },
+      {
+        "id": "maskNumber",
+        "label": "Maskennummer",
+        "type": "int"
+      }
+    ],
+    "liquid": [
+      {
+        "id": "liquid",
+        "label": "Menge in Liter",
+        "type": "float"
+      }
+    ],
+    "piece": [
+      {
+        "id": "piece",
+        "label": "Stück",
+        "type": "int"
+      }
+    ],
+    "area": [
+      {
+        "id": "area",
+        "label": "m2",
+        "type": "float"
+      }
+    ],
+    "length": [
+      {
+        "id": "length",
+        "label": "Länge in Meter",
+        "type": "float"
+      }
+    ],
+    "weight": [
+      {
+        "id": "weight",
+        "label": "Menge in kg",
+        "type": "float"
+      }
+    ],
+    "generic": [
+      {
+        "id": "text",
+        "label": "",
+        "type": "string"
+      }
+    ]
+  },
+  "types": [
+    {
+      "id": "hlf",
+      "category": "vehicle",
+      "name": "HLF"
+    },
+    {
+      "id": "lf",
+      "category": "vehicle",
+      "name": "LF"
+    },
+    {
+      "id": "mzf",
+      "category": "vehicle",
+      "name": "MZF"
+    },
+    {
+      "id": "boot",
+      "category": "boat",
+      "name": "Boot"
+    },
+    {
+      "id": "lima",
+      "category": "generic",
+      "name": "Lima",
+      "notes": "Lichtmastanhänger"
+    },
+    {
+      "id": "atemschutz1",
+      "category": "breathingProtection",
+      "name": "Atemschutzgerät 1"
+    },
+    {
+      "id": "atemschutz2",
+      "category": "breathingProtection",
+      "name": "Atemschutzgerät 2"
+    },
+    {
+      "id": "atemschutz3",
+      "category": "breathingProtection",
+      "name": "Atemschutzgerät 3"
+    },
+    {
+      "id": "atemschutz4",
+      "category": "breathingProtection",
+      "name": "Atemschutzgerät 4"
+    },
+    {
+      "id": "atemschutz5",
+      "category": "breathingProtection",
+      "name": "Atemschutzgerät 5"
+    },
+    {
+      "id": "atemschutz6",
+      "category": "breathingProtection",
+      "name": "Atemschutzgerät 6"
+    },
+    {
+      "id": "atemschutz7",
+      "category": "breathingProtection",
+      "name": "Atemschutzgerät 7"
+    },
+    {
+      "id": "atemschutz8",
+      "category": "breathingProtection",
+      "name": "Atemschutzgerät 8"
+    },
+    {
+      "id": "atemschutz9",
+      "category": "breathingProtection",
+      "name": "Atemschutzgerät 9"
+    },
+    {
+      "id": "atemschutz10",
+      "category": "breathingProtection",
+      "name": "Atemschutzgerät 10"
+    },
+    {
+      "id": "defi1",
+      "category": "generic",
+      "name": "AED/Defibrillator"
+    },
+    {
+      "id": "arbeitsplattform",
+      "category": "generic",
+      "name": "Arbeits-/Rettungsplattform",
+      "notes": "...Steige"
+    },
+    {
+      "id": "atp",
+      "category": "generic",
+      "name": "ATP 20 (Abwassertauchpumpe)"
+    },
+    {
+      "id": "lüfter1",
+      "category": "generic",
+      "name": "Be-/Entlüftungsgerät"
+    },
+    {
+      "id": "beleuchtungssatz1",
+      "category": "generic",
+      "name": "Beleuchtungssatz LF"
+    },
+    {
+      "id": "beleuchtungssatz2",
+      "category": "generic",
+      "name": "Beleuchtungssatz HLF"
+    },
+    {
+      "id": "besen",
+      "category": "generic",
+      "name": "Besen"
+    },
+    {
+      "id": "eisretter",
+      "category": "generic",
+      "name": "Eisretter",
+      "notes": "Eisrettungsschlitten"
+    },
+    {
+      "id": "feuerpatsche",
+      "category": "generic",
+      "name": "Feuerpatsche"
+    },
+    {
+      "id": "hebekissen",
+      "category": "generic",
+      "name": "Hebekissensatz"
+    },
+    {
+      "id": "hydraulicrescuekit",
+      "category": "generic",
+      "name": "Hydraulischer Rettungssatz",
+      "notes": "Standart (S90/SP30)"
+    },
+    {
+      "id": "watercleaner",
+      "category": "generic",
+      "name": "Industriesauger",
+      "notes": "Wassersauger"
+    },
+    {
+      "id": "slightlyfoaminggenerator",
+      "category": "generic",
+      "name": "Leichtschaumgenerator"
+    },
+    {
+      "id": "lenzpumpe",
+      "category": "generic",
+      "name": "Lenzpumpe Schmutzwasser > 1600l/min"
+    },
+    {
+      "id": "greifzug",
+      "category": "generic",
+      "name": "Mehrzweckzug > 1,6kN",
+      "notes": "Greifzug"
+    },
+    {
+      "id": "motorsäge",
+      "category": "generic",
+      "name": "Motorsäge"
+    },
+    {
+      "id": "rettungsbrett",
+      "category": "generic",
+      "name": "Rettungsbrett"
+    },
+    {
+      "id": "rettungszylinder",
+      "category": "generic",
+      "name": "Rettungszylinder",
+      "notes": "RZ-Satz)"
+    },
+    {
+      "id": "schaummittel",
+      "category": "liquid",
+      "name": "Schaummittel"
+    },
+    {
+      "id": "leiter3tlg",
+      "category": "generic",
+      "name": "Schiebeleiter 3-teilig"
+    },
+    {
+      "id": "schlauchboot",
+      "category": "boat",
+      "name": "Schlauchboot"
+    },
+    {
+      "id": "steckleiter",
+      "category": "generic",
+      "name": "Steckleiter"
+    },
+    {
+      "id": "tp4",
+      "category": "generic",
+      "name": "TP (Tauchpumpe) 4/1"
+    },
+    {
+      "id": "tp8",
+      "category": "generic",
+      "name": "TP (Tauchpumpe) 8"
+    },
+    {
+      "id": "lüfter2",
+      "category": "generic",
+      "name": "Überdruck- / Hochdrucklüfter"
+    },
+    {
+      "id": "wärmebildkamera",
+      "category": "generic",
+      "name": "Wärmebildkamera"
+    },
+    {
+      "id": "wärmeschutzkleidung",
+      "category": "generic",
+      "name": "Wärmeschutzkleidung Form 3 (kpl. Anzug)"
+    },
+    {
+      "id": "wasserschild",
+      "category": "generic",
+      "name": "Wasserschild",
+      "notes": "Hydroschild"
+    },
+    {
+      "id": "wathose",
+      "category": "generic",
+      "name": "Wathose"
+    },
+    {
+      "id": "werkzeugtüröffnung",
+      "category": "generic",
+      "name": "Werkzeugsatz Türöffnung"
+    },
+    {
+      "id": "abdeckplane",
+      "category": "area",
+      "name": "Abdeckplane"
+    },
+    {
+      "id": "absperrband",
+      "category": "length",
+      "name": "Absperrband (Flatterl.) rot/weiß"
+    },
+    {
+      "id": "absperrk",
+      "category": "piece",
+      "name": "Absperrk. Kunstst. rot/weiß"
+    },
+    {
+      "id": "atemspendehilfsmittel",
+      "category": "piece",
+      "name": "Atemspende- Hilfsmittel"
+    },
+    {
+      "id": "co2",
+      "category": "generic",
+      "name": "Kohlendioxid CO2"
+    },
+    {
+      "id": "löschpulverABC",
+      "category": "liquid",
+      "name": "Löschpulver ABC"
+    },
+    {
+      "id": "löschpulverBC",
+      "category": "liquid",
+      "name": "Löschpulver BC"
+    },
+    {
+      "id": "löschpulverD",
+      "category": "liquid",
+      "name": "Löschpulver D"
+    },
+    {
+      "id": "sandsack",
+      "category": "piece",
+      "name": "Sandsack (gefüllt)"
+    },
+    {
+      "id": "ölbindemittel",
+      "category": "liquid",
+      "name": "Ölbindemittel"
+    },
+    {
+      "id": "other",
+      "category": "generic",
+      "name": "Sonstiges"
+    }
+  ]
+}
